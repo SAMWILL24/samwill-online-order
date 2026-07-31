@@ -2,14 +2,19 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 
 function signCustomerToken(customer) {
-  return jwt.sign({ sub: customer.id, email: customer.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign(
+    { sub: customer.id, email: customer.email, storeId: customer.store_id },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
 }
 
 // A token can be structurally valid but reference a customer that no longer exists
-// (deleted account, or a stale token from before a dev DB reset) - treat that the
-// same as "not logged in" rather than letting a dangling id reach the DB layer.
-function customerExists(id) {
-  return Boolean(db.prepare('SELECT 1 FROM customers WHERE id = ?').get(id));
+// (deleted account, or a stale token from before a dev DB reset), or belong to a
+// different store than the one in the URL - treat all of that as "not logged in"
+// rather than letting a mismatched id reach the DB layer.
+function customerBelongsToStore(id, storeId) {
+  return Boolean(db.prepare('SELECT 1 FROM customers WHERE id = ? AND store_id = ?').get(id, storeId));
 }
 
 function optionalCustomerAuth(req, res, next) {
@@ -17,7 +22,9 @@ function optionalCustomerAuth(req, res, next) {
   if (header && header.startsWith('Bearer ')) {
     try {
       const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
-      if (customerExists(payload.sub)) req.customerId = payload.sub;
+      if (payload.storeId === req.store.id && customerBelongsToStore(payload.sub, req.store.id)) {
+        req.customerId = payload.sub;
+      }
     } catch {
       // ignore invalid/expired token, treat as guest
     }
@@ -32,7 +39,9 @@ function requireCustomerAuth(req, res, next) {
   }
   try {
     const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
-    if (!customerExists(payload.sub)) return res.status(401).json({ error: 'Account no longer exists' });
+    if (payload.storeId !== req.store.id || !customerBelongsToStore(payload.sub, req.store.id)) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
     req.customerId = payload.sub;
     next();
   } catch {
@@ -40,10 +49,13 @@ function requireCustomerAuth(req, res, next) {
   }
 }
 
+// Requires resolveStore to have already run (req.store set). A logged-in session for
+// store A must never authorize actions on store B, even if the admin guesses the URL -
+// so both the admin id AND the matching store id are required.
 function requireAdminAuth(req, res, next) {
-  if (req.session && req.session.adminId) return next();
+  if (req.session && req.session.adminId && req.session.storeId === req.store.id) return next();
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Admin authentication required' });
-  return res.redirect('/admin/login');
+  return res.redirect(`/${req.store.slug}/admin/login`);
 }
 
 module.exports = { signCustomerToken, optionalCustomerAuth, requireCustomerAuth, requireAdminAuth };

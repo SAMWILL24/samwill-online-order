@@ -5,7 +5,7 @@ const { toAbsoluteUrl } = require('../lib/url');
 const router = express.Router();
 
 router.get('/active', (req, res) => {
-  const promos = getActivePromotions().map((p) => ({
+  const promos = getActivePromotions(req.store.id).map((p) => ({
     id: p.id,
     title: p.title,
     description: p.description,

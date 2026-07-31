@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useApp } from '../context/AppContext';
 import type { MenuCategory, MenuItem } from '../types';
 import { ItemModal } from '../components/ItemModal';
 import { formatCents } from '../lib/money';
 
 export function MenuPage() {
+  const { api } = useApp();
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -18,7 +19,7 @@ export function MenuPage() {
         setActiveCategory(data.categories[0]?.id ?? null);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [api]);
 
   if (loading) return <div className="loading">Loading menu…</div>;
 

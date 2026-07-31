@@ -19,23 +19,27 @@ const uploadsDir = path.join(dataDir, 'uploads', 'menu');
 // ---- Auth (session-based) ----
 
 router.get('/login', (req, res) => {
-  if (req.session.adminId) return res.redirect('/admin');
-  res.render('admin/login', { error: null });
+  if (req.session.adminId && req.session.storeId === req.store.id) return res.redirect(`/${req.store.slug}/admin`);
+  res.render('admin/login', { error: null, store: req.store });
 });
 
 router.post('/login', (req, res) => {
   const { email, password } = req.body || {};
-  const admin = db.prepare('SELECT * FROM admin_users WHERE email = ?').get((email || '').toLowerCase());
+  const admin = db
+    .prepare('SELECT * FROM admin_users WHERE store_id = ? AND email = ?')
+    .get(req.store.id, (email || '').toLowerCase());
   if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
-    return res.render('admin/login', { error: 'Invalid email or password' });
+    return res.render('admin/login', { error: 'Invalid email or password', store: req.store });
   }
   req.session.adminId = admin.id;
+  req.session.storeId = req.store.id;
   req.session.adminEmail = admin.email;
-  res.redirect('/admin');
+  res.redirect(`/${req.store.slug}/admin`);
 });
 
 router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/admin/login'));
+  const slug = req.store.slug;
+  req.session.destroy(() => res.redirect(`/${slug}/admin/login`));
 });
 
 router.use(requireAdminAuth);
@@ -43,65 +47,65 @@ router.use(requireAdminAuth);
 // ---- Pages ----
 
 function renderPage(view, section, page) {
-  return (req, res) => res.render(view, { adminEmail: req.session.adminEmail, section, page });
+  return (req, res) => res.render(view, { adminEmail: req.session.adminEmail, section, page, store: req.store });
 }
 
 router.get('/', renderPage('admin/home', 'home', null));
 router.get('/orders', renderPage('admin/orders', 'orders', null));
 
-router.get('/menu', (req, res) => res.redirect('/admin/menu/overview'));
+router.get('/menu', (req, res) => res.redirect(`/${req.store.slug}/admin/menu/overview`));
 router.get('/menu/overview', renderPage('admin/menu/overview', 'menu', 'overview'));
 router.get('/menu/items', renderPage('admin/menu/items', 'menu', 'items'));
 router.get('/menu/categories', renderPage('admin/menu/categories', 'menu', 'categories'));
 router.get('/menu/add-ons', renderPage('admin/menu/add-ons', 'menu', 'add-ons'));
-router.get('/menu/modifiers', (req, res) => res.redirect('/admin/menu/add-ons'));
+router.get('/menu/modifiers', (req, res) => res.redirect(`/${req.store.slug}/admin/menu/add-ons`));
 
-router.get('/marketing', (req, res) => res.redirect('/admin/marketing/coupons'));
+router.get('/marketing', (req, res) => res.redirect(`/${req.store.slug}/admin/marketing/coupons`));
 router.get('/marketing/coupons', renderPage('admin/marketing/coupons', 'marketing', 'coupons'));
 router.get('/marketing/loyalty', renderPage('admin/marketing/loyalty', 'marketing', 'loyalty'));
 router.get('/marketing/announcements', renderPage('admin/marketing/announcements', 'marketing', 'announcements'));
-router.get('/promotions', (req, res) => res.redirect('/admin/marketing/coupons'));
+router.get('/promotions', (req, res) => res.redirect(`/${req.store.slug}/admin/marketing/coupons`));
 
-router.get('/reporting', (req, res) => res.redirect('/admin/reporting/order-reports'));
+router.get('/reporting', (req, res) => res.redirect(`/${req.store.slug}/admin/reporting/order-reports`));
 router.get('/reporting/order-reports', renderPage('admin/reporting/order-reports', 'reporting', 'order-reports'));
-router.get('/reporting/all-reports', (req, res) => res.redirect('/admin/reporting/order-reports'));
+router.get('/reporting/all-reports', (req, res) => res.redirect(`/${req.store.slug}/admin/reporting/order-reports`));
 router.get('/reporting/analytics', renderPage('admin/reporting/analytics', 'reporting', 'analytics'));
 
 router.get('/customers', renderPage('admin/customers', 'customers', null));
 
-router.get('/design', (req, res) => res.redirect('/admin/design/branding'));
+router.get('/design', (req, res) => res.redirect(`/${req.store.slug}/admin/design/branding`));
 router.get('/design/branding', renderPage('admin/design/branding', 'design', 'branding'));
-router.get('/design/settings', (req, res) => res.redirect('/admin/design/branding'));
+router.get('/design/settings', (req, res) => res.redirect(`/${req.store.slug}/admin/design/branding`));
 router.get('/design/media-library', renderPage('admin/design/media-library', 'design', 'media-library'));
-router.get('/design/photos', (req, res) => res.redirect('/admin/design/media-library'));
+router.get('/design/photos', (req, res) => res.redirect(`/${req.store.slug}/admin/design/media-library`));
 
-router.get('/settings', (req, res) => res.redirect('/admin/settings/restaurant-profile'));
+router.get('/settings', (req, res) => res.redirect(`/${req.store.slug}/admin/settings/restaurant-profile`));
 router.get('/settings/restaurant-profile', renderPage('admin/settings/restaurant-profile', 'settings', 'restaurant-profile'));
-router.get('/settings/location-profile', (req, res) => res.redirect('/admin/settings/restaurant-profile'));
+router.get('/settings/location-profile', (req, res) => res.redirect(`/${req.store.slug}/admin/settings/restaurant-profile`));
 router.get('/settings/business-hours', renderPage('admin/settings/business-hours', 'settings', 'business-hours'));
-router.get('/settings/location-hours', (req, res) => res.redirect('/admin/settings/business-hours'));
+router.get('/settings/location-hours', (req, res) => res.redirect(`/${req.store.slug}/admin/settings/business-hours`));
 router.get('/settings/order-channels', renderPage('admin/settings/order-channels', 'settings', 'order-channels'));
-router.get('/settings/order-methods', (req, res) => res.redirect('/admin/settings/order-channels'));
+router.get('/settings/order-methods', (req, res) => res.redirect(`/${req.store.slug}/admin/settings/order-channels`));
 router.get('/settings/payments', renderPage('admin/settings/payments', 'settings', 'payments'));
 
 // ---- JSON API for dashboard/menu/settings pages ----
 
 router.get('/api/menu', (req, res) => {
-  res.json({ categories: getFullMenu({ includeInactive: true }) });
+  res.json({ categories: getFullMenu(req.store.id, { includeInactive: true }) });
 });
 
 router.post('/api/categories', (req, res) => {
   const { name, sortOrder, supportsHalfAndHalf } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name is required' });
   const info = db
-    .prepare('INSERT INTO categories (name, sort_order, supports_half_and_half) VALUES (?, ?, ?)')
-    .run(name, sortOrder || 0, supportsHalfAndHalf ? 1 : 0);
+    .prepare('INSERT INTO categories (store_id, name, sort_order, supports_half_and_half) VALUES (?, ?, ?, ?)')
+    .run(req.store.id, name, sortOrder || 0, supportsHalfAndHalf ? 1 : 0);
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
 router.put('/api/categories/:id', (req, res) => {
   const { name, sortOrder, supportsHalfAndHalf } = req.body || {};
-  const current = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id);
+  const current = db.prepare('SELECT * FROM categories WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Category not found' });
   db.prepare('UPDATE categories SET name = ?, sort_order = ?, supports_half_and_half = ? WHERE id = ?').run(
     name ?? current.name,
@@ -113,13 +117,25 @@ router.put('/api/categories/:id', (req, res) => {
 });
 
 router.delete('/api/categories/:id', (req, res) => {
-  db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
+  db.prepare('DELETE FROM categories WHERE id = ? AND store_id = ?').run(req.params.id, req.store.id);
   res.json({ ok: true });
 });
+
+function getOwnedCategory(categoryId, storeId) {
+  return db.prepare('SELECT * FROM categories WHERE id = ? AND store_id = ?').get(categoryId, storeId);
+}
+
+// Joins through categories (menu_items has no direct store_id) to verify ownership.
+function getOwnedItem(itemId, storeId) {
+  return db
+    .prepare(`SELECT mi.* FROM menu_items mi JOIN categories c ON c.id = mi.category_id WHERE mi.id = ? AND c.store_id = ?`)
+    .get(itemId, storeId);
+}
 
 router.post('/api/items', (req, res) => {
   const { categoryId, name, description, imageUrl, sortOrder } = req.body || {};
   if (!categoryId || !name) return res.status(400).json({ error: 'categoryId and name are required' });
+  if (!getOwnedCategory(categoryId, req.store.id)) return res.status(404).json({ error: 'Category not found' });
   const info = db
     .prepare('INSERT INTO menu_items (category_id, name, description, image_url, sort_order) VALUES (?, ?, ?, ?, ?)')
     .run(categoryId, name, description || null, imageUrl || null, sortOrder || 0);
@@ -128,8 +144,11 @@ router.post('/api/items', (req, res) => {
 
 router.put('/api/items/:id', (req, res) => {
   const { name, description, imageUrl, isActive, sortOrder, categoryId } = req.body || {};
-  const current = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(req.params.id);
+  const current = getOwnedItem(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Item not found' });
+  if (categoryId !== undefined && !getOwnedCategory(categoryId, req.store.id)) {
+    return res.status(404).json({ error: 'Category not found' });
+  }
   db.prepare(
     `UPDATE menu_items SET
       name = ?, description = ?, image_url = ?, is_active = ?, sort_order = ?, category_id = ?
@@ -147,12 +166,13 @@ router.put('/api/items/:id', (req, res) => {
 });
 
 router.delete('/api/items/:id', (req, res) => {
+  if (!getOwnedItem(req.params.id, req.store.id)) return res.status(404).json({ error: 'Item not found' });
   db.prepare('DELETE FROM menu_items WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
 router.post('/api/items/:id/image', upload.single('image'), async (req, res) => {
-  const item = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(req.params.id);
+  const item = getOwnedItem(req.params.id, req.store.id);
   if (!item) return res.status(404).json({ error: 'Item not found' });
   if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
 
@@ -168,15 +188,27 @@ router.post('/api/items/:id/image', upload.single('image'), async (req, res) => 
 router.post('/api/items/:id/sizes', (req, res) => {
   const { label, priceCents, sortOrder } = req.body || {};
   if (!label || !Number.isInteger(priceCents)) return res.status(400).json({ error: 'label and priceCents are required' });
+  if (!getOwnedItem(req.params.id, req.store.id)) return res.status(404).json({ error: 'Item not found' });
   const info = db
     .prepare('INSERT INTO item_sizes (menu_item_id, label, price_cents, sort_order) VALUES (?, ?, ?, ?)')
     .run(req.params.id, label, priceCents, sortOrder || 0);
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
+function getOwnedSize(sizeId, storeId) {
+  return db
+    .prepare(
+      `SELECT s.* FROM item_sizes s
+       JOIN menu_items mi ON mi.id = s.menu_item_id
+       JOIN categories c ON c.id = mi.category_id
+       WHERE s.id = ? AND c.store_id = ?`
+    )
+    .get(sizeId, storeId);
+}
+
 router.put('/api/sizes/:id', (req, res) => {
   const { label, priceCents } = req.body || {};
-  const current = db.prepare('SELECT * FROM item_sizes WHERE id = ?').get(req.params.id);
+  const current = getOwnedSize(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Size not found' });
   db.prepare('UPDATE item_sizes SET label = ?, price_cents = ? WHERE id = ?').run(
     label ?? current.label,
@@ -187,17 +219,27 @@ router.put('/api/sizes/:id', (req, res) => {
 });
 
 router.delete('/api/sizes/:id', (req, res) => {
+  if (!getOwnedSize(req.params.id, req.store.id)) return res.status(404).json({ error: 'Size not found' });
   db.prepare('DELETE FROM item_sizes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// Extra groups are shared entities (see menu_item_extra_groups): "add group" on an item
-// creates a brand new shared group and attaches it; "attach" links an already-existing
-// group (e.g. "Pizza Toppings") to another item without duplicating it.
+// Extra groups are shared entities within a store (see menu_item_extra_groups): "add
+// group" on an item creates a brand new shared group and attaches it; "attach" links an
+// already-existing group (e.g. "Pizza Toppings") to another item without duplicating it.
+
+function getOwnedGroup(groupId, storeId) {
+  return db.prepare('SELECT * FROM extra_groups WHERE id = ? AND store_id = ?').get(groupId, storeId);
+}
 
 router.get('/api/extra-groups', (req, res) => {
-  const groups = db.prepare('SELECT * FROM extra_groups ORDER BY name').all();
-  const extras = db.prepare('SELECT * FROM extras ORDER BY sort_order, id').all();
+  const groups = db.prepare('SELECT * FROM extra_groups WHERE store_id = ? ORDER BY name').all(req.store.id);
+  const groupIds = groups.map((g) => g.id);
+  const extras = groupIds.length
+    ? db
+        .prepare(`SELECT * FROM extras WHERE extra_group_id IN (${groupIds.map(() => '?').join(',')}) ORDER BY sort_order, id`)
+        .all(...groupIds)
+    : [];
   const extrasByGroup = extras.reduce((acc, e) => {
     (acc[e.extra_group_id] = acc[e.extra_group_id] || []).push(e);
     return acc;
@@ -213,24 +255,25 @@ router.get('/api/extra-groups', (req, res) => {
   });
 });
 
-// Creates a shared group with no item attached yet (used by the Modifiers library page;
+// Creates a shared group with no item attached yet (used by the Add-ons library page;
 // attach it to items afterward via the per-item attach endpoint below).
 router.post('/api/extra-groups', (req, res) => {
   const { name, minSelect, maxSelect } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name is required' });
   const info = db
-    .prepare('INSERT INTO extra_groups (name, min_select, max_select) VALUES (?, ?, ?)')
-    .run(name, minSelect ?? 0, maxSelect ?? 1);
+    .prepare('INSERT INTO extra_groups (store_id, name, min_select, max_select) VALUES (?, ?, ?, ?)')
+    .run(req.store.id, name, minSelect ?? 0, maxSelect ?? 1);
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
 router.post('/api/items/:id/extra-groups', (req, res) => {
   const { name, minSelect, maxSelect, sortOrder } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name is required' });
+  if (!getOwnedItem(req.params.id, req.store.id)) return res.status(404).json({ error: 'Item not found' });
   const attach = db.transaction(() => {
     const groupInfo = db
-      .prepare('INSERT INTO extra_groups (name, min_select, max_select, sort_order) VALUES (?, ?, ?, ?)')
-      .run(name, minSelect ?? 0, maxSelect ?? 1, sortOrder || 0);
+      .prepare('INSERT INTO extra_groups (store_id, name, min_select, max_select, sort_order) VALUES (?, ?, ?, ?, ?)')
+      .run(req.store.id, name, minSelect ?? 0, maxSelect ?? 1, sortOrder || 0);
     db.prepare('INSERT INTO menu_item_extra_groups (menu_item_id, extra_group_id, sort_order) VALUES (?, ?, ?)').run(
       req.params.id,
       groupInfo.lastInsertRowid,
@@ -242,7 +285,8 @@ router.post('/api/items/:id/extra-groups', (req, res) => {
 });
 
 router.post('/api/items/:id/extra-groups/:groupId/attach', (req, res) => {
-  const group = db.prepare('SELECT * FROM extra_groups WHERE id = ?').get(req.params.groupId);
+  if (!getOwnedItem(req.params.id, req.store.id)) return res.status(404).json({ error: 'Item not found' });
+  const group = getOwnedGroup(req.params.groupId, req.store.id);
   if (!group) return res.status(404).json({ error: 'Extra group not found' });
   const existing = db
     .prepare('SELECT id FROM menu_item_extra_groups WHERE menu_item_id = ? AND extra_group_id = ?')
@@ -258,6 +302,7 @@ router.post('/api/items/:id/extra-groups/:groupId/attach', (req, res) => {
 // Detach only removes the link between this item and the group - the shared group (and
 // its extras) still exists and stays attached to any other items using it.
 router.delete('/api/items/:id/extra-groups/:groupId', (req, res) => {
+  if (!getOwnedItem(req.params.id, req.store.id)) return res.status(404).json({ error: 'Item not found' });
   db.prepare('DELETE FROM menu_item_extra_groups WHERE menu_item_id = ? AND extra_group_id = ?').run(
     req.params.id,
     req.params.groupId
@@ -267,7 +312,7 @@ router.delete('/api/items/:id/extra-groups/:groupId', (req, res) => {
 
 router.put('/api/extra-groups/:id', (req, res) => {
   const { name, minSelect, maxSelect } = req.body || {};
-  const current = db.prepare('SELECT * FROM extra_groups WHERE id = ?').get(req.params.id);
+  const current = getOwnedGroup(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Extra group not found' });
   db.prepare('UPDATE extra_groups SET name = ?, min_select = ?, max_select = ? WHERE id = ?').run(
     name ?? current.name,
@@ -280,6 +325,7 @@ router.put('/api/extra-groups/:id', (req, res) => {
 
 // Deletes the shared group entirely (cascades: detaches from every item, removes its extras).
 router.delete('/api/extra-groups/:id', (req, res) => {
+  if (!getOwnedGroup(req.params.id, req.store.id)) return res.status(404).json({ error: 'Extra group not found' });
   db.prepare('DELETE FROM extra_groups WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
@@ -287,15 +333,24 @@ router.delete('/api/extra-groups/:id', (req, res) => {
 router.post('/api/extra-groups/:id/extras', (req, res) => {
   const { name, priceCents, sortOrder } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name is required' });
+  if (!getOwnedGroup(req.params.id, req.store.id)) return res.status(404).json({ error: 'Extra group not found' });
   const info = db
     .prepare('INSERT INTO extras (extra_group_id, name, price_cents, sort_order) VALUES (?, ?, ?, ?)')
     .run(req.params.id, name, priceCents || 0, sortOrder || 0);
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
+function getOwnedExtra(extraId, storeId) {
+  return db
+    .prepare(
+      `SELECT e.* FROM extras e JOIN extra_groups eg ON eg.id = e.extra_group_id WHERE e.id = ? AND eg.store_id = ?`
+    )
+    .get(extraId, storeId);
+}
+
 router.put('/api/extras/:id', (req, res) => {
   const { name, priceCents } = req.body || {};
-  const current = db.prepare('SELECT * FROM extras WHERE id = ?').get(req.params.id);
+  const current = getOwnedExtra(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Extra not found' });
   db.prepare('UPDATE extras SET name = ?, price_cents = ? WHERE id = ?').run(
     name ?? current.name,
@@ -306,6 +361,7 @@ router.put('/api/extras/:id', (req, res) => {
 });
 
 router.delete('/api/extras/:id', (req, res) => {
+  if (!getOwnedExtra(req.params.id, req.store.id)) return res.status(404).json({ error: 'Extra not found' });
   db.prepare('DELETE FROM extras WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
@@ -313,7 +369,7 @@ router.delete('/api/extras/:id', (req, res) => {
 // ---- Promotions ----
 
 router.get('/api/promotions', (req, res) => {
-  res.json({ promotions: db.prepare('SELECT * FROM promotions ORDER BY created_at DESC').all() });
+  res.json({ promotions: db.prepare('SELECT * FROM promotions WHERE store_id = ? ORDER BY created_at DESC').all(req.store.id) });
 });
 
 router.post('/api/promotions', (req, res) => {
@@ -324,10 +380,11 @@ router.post('/api/promotions', (req, res) => {
   const info = db
     .prepare(
       `INSERT INTO promotions
-        (code, title, description, discount_type, discount_value, min_subtotal_cents, auto_apply, starts_at, ends_at, days_of_week, start_time, end_time, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (store_id, code, title, description, discount_type, discount_value, min_subtotal_cents, auto_apply, starts_at, ends_at, days_of_week, start_time, end_time, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
+      req.store.id,
       p.code || null,
       p.title,
       p.description || null,
@@ -347,7 +404,7 @@ router.post('/api/promotions', (req, res) => {
 
 router.put('/api/promotions/:id', (req, res) => {
   const p = req.body || {};
-  const current = db.prepare('SELECT * FROM promotions WHERE id = ?').get(req.params.id);
+  const current = db.prepare('SELECT * FROM promotions WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Promotion not found' });
   db.prepare(
     `UPDATE promotions SET
@@ -374,28 +431,28 @@ router.put('/api/promotions/:id', (req, res) => {
 });
 
 router.delete('/api/promotions/:id', (req, res) => {
-  db.prepare('DELETE FROM promotions WHERE id = ?').run(req.params.id);
+  db.prepare('DELETE FROM promotions WHERE id = ? AND store_id = ?').run(req.params.id, req.store.id);
   res.json({ ok: true });
 });
 
-// ---- Settings ----
+// ---- Settings (the store's own row in `stores`) ----
 
 router.get('/api/settings', (req, res) => {
-  res.json(db.prepare('SELECT * FROM restaurant_settings WHERE id = 1').get());
+  res.json(db.prepare('SELECT * FROM stores WHERE id = ?').get(req.store.id));
 });
 
 router.put('/api/settings', (req, res) => {
   const s = req.body || {};
-  const current = db.prepare('SELECT * FROM restaurant_settings WHERE id = 1').get();
+  const current = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.store.id);
   db.prepare(
-    `UPDATE restaurant_settings SET
+    `UPDATE stores SET
       name = ?, address = ?, delivery_fee_cents = ?, min_delivery_cents = ?, tax_rate_bps = ?,
       delivery_radius_miles = ?, is_open_override = ?,
       loyalty_earn_rate_per_dollar = ?, loyalty_redeem_value_cents = ?, loyalty_min_redeem_points = ?,
       pickup_enabled = ?, delivery_enabled = ?, curbside_enabled = ?, theme_accent_color = ?,
       online_ordering_enabled = ?, store_description = ?, prep_time_minutes = ?, order_mode = ?,
       digital_menu_url = ?
-     WHERE id = 1`
+     WHERE id = ?`
   ).run(
     s.name ?? current.name,
     s.address ?? current.address,
@@ -415,7 +472,8 @@ router.put('/api/settings', (req, res) => {
     s.storeDescription ?? current.store_description,
     Number.isInteger(s.prepTimeMinutes) ? s.prepTimeMinutes : current.prep_time_minutes,
     s.orderMode ?? current.order_mode,
-    s.digitalMenuUrl ?? current.digital_menu_url
+    s.digitalMenuUrl ?? current.digital_menu_url,
+    req.store.id
   );
   res.json({ ok: true });
 });
@@ -424,7 +482,7 @@ router.put('/api/settings', (req, res) => {
 
 router.get('/api/business-hours', (req, res) => {
   const type = req.query.type === 'delivery' ? 'delivery' : 'pickup';
-  res.json({ type, days: getWeekHours(type) });
+  res.json({ type, days: getWeekHours(req.store.id, type) });
 });
 
 router.put('/api/business-hours', (req, res) => {
@@ -432,7 +490,7 @@ router.put('/api/business-hours', (req, res) => {
   if (!['pickup', 'delivery'].includes(type) || !Array.isArray(days)) {
     return res.status(400).json({ error: 'type and days are required' });
   }
-  setWeekHours(type, days);
+  setWeekHours(req.store.id, type, days);
   res.json({ ok: true });
 });
 
@@ -446,11 +504,11 @@ router.post('/api/design/:slot/image', upload.single('image'), async (req, res) 
   if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
 
   fs.mkdirSync(uploadsDir, { recursive: true });
-  const filename = `branding-${req.params.slot}-${Date.now()}.jpg`;
+  const filename = `branding-${req.store.id}-${req.params.slot}-${Date.now()}.jpg`;
   await sharp(req.file.buffer).resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality: 82 }).toFile(path.join(uploadsDir, filename));
 
   const imageUrl = `/uploads/menu/${filename}`;
-  db.prepare(`UPDATE restaurant_settings SET ${column} = ? WHERE id = 1`).run(imageUrl);
+  db.prepare(`UPDATE stores SET ${column} = ? WHERE id = ?`).run(imageUrl, req.store.id);
   res.json({ imageUrl });
 });
 
@@ -459,8 +517,10 @@ router.post('/api/design/:slot/image', upload.single('image'), async (req, res) 
 router.get('/api/orders', (req, res) => {
   const status = req.query.status;
   const orders = status
-    ? db.prepare('SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC').all(status)
-    : db.prepare("SELECT * FROM orders WHERE status != 'completed' ORDER BY created_at DESC").all();
+    ? db.prepare('SELECT * FROM orders WHERE store_id = ? AND status = ? ORDER BY created_at DESC').all(req.store.id, status)
+    : db
+        .prepare("SELECT * FROM orders WHERE store_id = ? AND status != 'completed' ORDER BY created_at DESC")
+        .all(req.store.id);
   res.json({ orders: orders.map(serializeOrder) });
 });
 
@@ -469,33 +529,33 @@ const VALID_STATUSES = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_de
 router.patch('/api/orders/:id', (req, res) => {
   const { status } = req.body || {};
   if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  const info = db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, req.params.id);
+  const info = db.prepare('UPDATE orders SET status = ? WHERE id = ? AND store_id = ?').run(status, req.params.id, req.store.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Order not found' });
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   const io = req.app.get('io');
-  io.to(`order:${order.id}`).emit('order:update', serializeOrder(order));
-  io.to('admin').emit('order:update', serializeOrder(order));
+  io.to(`order:${req.store.id}:${order.id}`).emit('order:update', serializeOrder(order));
+  io.to(`admin:${req.store.id}`).emit('order:update', serializeOrder(order));
   res.json({ order: serializeOrder(order) });
 });
 
 // ---- Announcements ----
 
 router.get('/api/announcements', (req, res) => {
-  res.json({ announcements: db.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all() });
+  res.json({ announcements: db.prepare('SELECT * FROM announcements WHERE store_id = ? ORDER BY created_at DESC').all(req.store.id) });
 });
 
 router.post('/api/announcements', (req, res) => {
   const { message, isActive } = req.body || {};
   if (!message) return res.status(400).json({ error: 'message is required' });
   const info = db
-    .prepare('INSERT INTO announcements (message, is_active) VALUES (?, ?)')
-    .run(message, isActive === false ? 0 : 1);
+    .prepare('INSERT INTO announcements (store_id, message, is_active) VALUES (?, ?, ?)')
+    .run(req.store.id, message, isActive === false ? 0 : 1);
   res.status(201).json({ id: info.lastInsertRowid });
 });
 
 router.put('/api/announcements/:id', (req, res) => {
   const { message, isActive } = req.body || {};
-  const current = db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
+  const current = db.prepare('SELECT * FROM announcements WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
   if (!current) return res.status(404).json({ error: 'Announcement not found' });
   db.prepare('UPDATE announcements SET message = ?, is_active = ? WHERE id = ?').run(
     message ?? current.message,
@@ -506,7 +566,7 @@ router.put('/api/announcements/:id', (req, res) => {
 });
 
 router.delete('/api/announcements/:id', (req, res) => {
-  db.prepare('DELETE FROM announcements WHERE id = ?').run(req.params.id);
+  db.prepare('DELETE FROM announcements WHERE id = ? AND store_id = ?').run(req.params.id, req.store.id);
   res.json({ ok: true });
 });
 
@@ -519,10 +579,11 @@ router.get('/api/customers', (req, res) => {
               COUNT(o.id) AS order_count, COALESCE(SUM(o.total_cents), 0) AS lifetime_spend_cents
        FROM customers c
        LEFT JOIN orders o ON o.customer_id = c.id
+       WHERE c.store_id = ?
        GROUP BY c.id
        ORDER BY c.created_at DESC`
     )
-    .all();
+    .all(req.store.id);
   res.json({
     customers: customers.map((c) => ({
       id: c.id,
@@ -542,11 +603,11 @@ router.get('/api/customers', (req, res) => {
 router.get('/api/reports/summary', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const todayOrders = db
-    .prepare(`SELECT * FROM orders WHERE date(created_at) = ? AND status != 'cancelled'`)
-    .all(today);
+    .prepare(`SELECT * FROM orders WHERE store_id = ? AND date(created_at) = ? AND status != 'cancelled'`)
+    .all(req.store.id, today);
   const pendingCount = db
-    .prepare(`SELECT COUNT(*) AS n FROM orders WHERE status NOT IN ('completed', 'cancelled')`)
-    .get().n;
+    .prepare(`SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND status NOT IN ('completed', 'cancelled')`)
+    .get(req.store.id).n;
   const revenueCents = todayOrders.reduce((sum, o) => sum + o.total_cents, 0);
   const avgOrderCents = todayOrders.length ? Math.round(revenueCents / todayOrders.length) : 0;
   res.json({
@@ -559,8 +620,8 @@ router.get('/api/reports/summary', (req, res) => {
 
 router.get('/api/reports/orders', (req, res) => {
   const { from, to, status } = req.query;
-  const clauses = [];
-  const params = [];
+  const clauses = ['store_id = ?'];
+  const params = [req.store.id];
   if (from) {
     clauses.push('date(created_at) >= ?');
     params.push(from);
@@ -573,8 +634,7 @@ router.get('/api/reports/orders', (req, res) => {
     clauses.push('status = ?');
     params.push(status);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  const orders = db.prepare(`SELECT * FROM orders ${where} ORDER BY created_at DESC`).all(...params);
+  const orders = db.prepare(`SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC`).all(...params);
 
   if (req.query.format === 'csv') {
     const header = 'Order ID,Date,Type,Status,Customer/Guest,Subtotal,Discount,Delivery Fee,Gratuity,Tax,Total,Payment Status\n';
@@ -609,23 +669,23 @@ router.get('/api/reports/analytics', (req, res) => {
     .prepare(
       `SELECT date(created_at) AS day, SUM(total_cents) AS revenue_cents, COUNT(*) AS order_count
        FROM orders
-       WHERE status != 'cancelled' AND created_at >= date('now', '-30 days')
+       WHERE store_id = ? AND status != 'cancelled' AND created_at >= date('now', '-30 days')
        GROUP BY day
        ORDER BY day`
     )
-    .all();
+    .all(req.store.id);
 
   const topItems = db
     .prepare(
       `SELECT menu_item_name, SUM(quantity) AS total_quantity, SUM(quantity * unit_price_cents) AS total_revenue_cents
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
-       WHERE o.status != 'cancelled'
+       WHERE o.store_id = ? AND o.status != 'cancelled'
        GROUP BY menu_item_name
        ORDER BY total_quantity DESC
        LIMIT 5`
     )
-    .all();
+    .all(req.store.id);
 
   res.json({
     revenueByDay: revenueByDay.map((r) => ({ day: r.day, revenueCents: r.revenue_cents, orderCount: r.order_count })),
@@ -637,7 +697,20 @@ router.get('/api/reports/analytics', (req, res) => {
   });
 });
 
-// ---- Photo Manager ----
+// ---- Media Library ----
+// Uploads share one flat directory across every store; ownership is inferred from
+// which store's menu items or branding fields currently reference a given filename.
+
+function fileOwnerStoreId(url) {
+  const item = db
+    .prepare(`SELECT c.store_id FROM menu_items mi JOIN categories c ON c.id = mi.category_id WHERE mi.image_url = ?`)
+    .get(url);
+  if (item) return item.store_id;
+  const store = db
+    .prepare('SELECT id FROM stores WHERE ad_image_url = ? OR header_image_url = ? OR footer_image_url = ?')
+    .get(url, url, url);
+  return store ? store.id : null;
+}
 
 router.get('/api/photos', (req, res) => {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -645,18 +718,20 @@ router.get('/api/photos', (req, res) => {
     const stat = fs.statSync(path.join(uploadsDir, filename));
     return { filename, url: `/uploads/menu/${filename}`, sizeBytes: stat.size, modifiedAt: stat.mtime };
   });
-  const inUse = new Set(
-    db
-      .prepare("SELECT image_url FROM menu_items WHERE image_url LIKE '/uploads/menu/%'")
-      .all()
-      .map((r) => r.image_url)
-  );
-  res.json({ photos: files.map((f) => ({ ...f, inUse: inUse.has(f.url) })) });
+  const visible = files.filter((f) => {
+    const ownerId = fileOwnerStoreId(f.url);
+    return ownerId === null || ownerId === req.store.id;
+  });
+  res.json({ photos: visible.map((f) => ({ ...f, inUse: fileOwnerStoreId(f.url) === req.store.id })) });
 });
 
 router.delete('/api/photos/:filename', (req, res) => {
   const filePath = path.join(uploadsDir, req.params.filename);
   if (!filePath.startsWith(uploadsDir)) return res.status(400).json({ error: 'Invalid filename' });
+  const ownerId = fileOwnerStoreId(`/uploads/menu/${req.params.filename}`);
+  if (ownerId !== null && ownerId !== req.store.id) {
+    return res.status(403).json({ error: 'This file belongs to another store' });
+  }
   fs.rm(filePath, { force: true }, (err) => {
     if (err) return res.status(500).json({ error: 'Could not delete file' });
     res.json({ ok: true });

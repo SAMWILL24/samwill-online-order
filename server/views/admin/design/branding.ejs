@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Branding - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
@@ -18,8 +18,8 @@
 
   <h1>Design</h1>
   <div class="tabs">
-    <a href="/admin/design/branding" class="<%= page === 'branding' ? 'active' : '' %>">Branding</a>
-    <a href="/admin/design/media-library" class="<%= page === 'media-library' ? 'active' : '' %>">Media Library</a>
+    <a href="/<%= store.slug %>/admin/design/branding" class="<%= page === 'branding' ? 'active' : '' %>">Branding</a>
+    <a href="/<%= store.slug %>/admin/design/media-library" class="<%= page === 'media-library' ? 'active' : '' %>">Media Library</a>
   </div>
 
   <div class="card">
@@ -76,6 +76,7 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     function syncFromPicker(value) {
       document.querySelector('input[name="colorHex"]').value = value;
       document.getElementById('preview').style.background = value;
@@ -93,7 +94,7 @@
     }
 
     async function load() {
-      const res = await fetch('/admin/api/settings');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/settings`);
       const s = await res.json();
       const color = s.theme_accent_color || '#0d9488';
       document.querySelector('input[name="colorPicker"]').value = color;
@@ -108,7 +109,7 @@
     async function saveColor(e) {
       e.preventDefault();
       const hex = document.querySelector('input[name="colorHex"]').value;
-      await fetch('/admin/api/settings', {
+      await fetch(`/${STORE_SLUG}/admin/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ themeAccentColor: hex }),
@@ -124,7 +125,7 @@
       if (!file) return;
       const formData = new FormData();
       formData.append('image', file);
-      const res = await fetch(`/admin/api/design/${slot}/image`, { method: 'POST', body: formData });
+      const res = await fetch(`/${STORE_SLUG}/admin/api/design/${slot}/image`, { method: 'POST', body: formData });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         alert(body.error || 'Upload failed');
@@ -137,7 +138,7 @@
     async function saveDigitalMenuLink(e) {
       e.preventDefault();
       const url = e.target.digitalMenuUrl.value;
-      await fetch('/admin/api/settings', {
+      await fetch(`/${STORE_SLUG}/admin/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ digitalMenuUrl: url }),

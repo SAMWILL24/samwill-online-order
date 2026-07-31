@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useApp } from '../context/AppContext';
 import type { Promotion } from '../types';
 
 export function PromotionsBanner() {
+  const { api } = useApp();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
 
   useEffect(() => {
     api.getActivePromotions().then((res) => setPromotions(res.promotions)).catch(() => {});
-  }, []);
+  }, [api]);
 
   if (promotions.length === 0) return null;
 

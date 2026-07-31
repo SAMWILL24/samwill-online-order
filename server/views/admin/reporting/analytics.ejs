@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Analytics - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 180px; margin-top: 1rem; }
     .bar-chart .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
@@ -15,8 +15,8 @@
 
   <h1>Reporting</h1>
   <div class="tabs">
-    <a href="/admin/reporting/order-reports" class="<%= page === 'order-reports' ? 'active' : '' %>">Order Reports</a>
-    <a href="/admin/reporting/analytics" class="<%= page === 'analytics' ? 'active' : '' %>">Analytics</a>
+    <a href="/<%= store.slug %>/admin/reporting/order-reports" class="<%= page === 'order-reports' ? 'active' : '' %>">Order Reports</a>
+    <a href="/<%= store.slug %>/admin/reporting/analytics" class="<%= page === 'analytics' ? 'active' : '' %>">Analytics</a>
   </div>
 
   <div class="card">
@@ -30,10 +30,11 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     function money(cents) { return '$' + (cents / 100).toFixed(2); }
 
     async function load() {
-      const res = await fetch('/admin/api/reports/analytics');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/reports/analytics`);
       const data = await res.json();
 
       const maxRevenue = Math.max(1, ...data.revenueByDay.map(d => d.revenueCents));

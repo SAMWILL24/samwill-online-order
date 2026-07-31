@@ -8,19 +8,19 @@ const { toAbsoluteUrl } = require('../lib/url');
 const router = express.Router();
 
 router.get('/menu', (req, res) => {
-  res.json({ categories: getFullMenu() });
+  res.json({ categories: getFullMenu(req.store.id) });
 });
 
 router.get('/settings', (req, res) => {
-  const s = getSettings();
+  const s = getSettings(req.store.id);
   res.json({
     name: s.name,
     address: s.address,
     deliveryFeeCents: s.delivery_fee_cents,
     minDeliveryCents: s.min_delivery_cents,
     taxRateBps: s.tax_rate_bps,
-    pickupHoursToday: getTodayHoursLabel('pickup'),
-    deliveryHoursToday: getTodayHoursLabel('delivery'),
+    pickupHoursToday: getTodayHoursLabel(req.store.id, 'pickup'),
+    deliveryHoursToday: getTodayHoursLabel(req.store.id, 'delivery'),
     deliveryRadiusMiles: s.delivery_radius_miles,
     isOpenOverride: s.is_open_override,
     loyaltyEarnRatePerDollar: s.loyalty_earn_rate_per_dollar,
@@ -42,7 +42,9 @@ router.get('/settings', (req, res) => {
 });
 
 router.get('/announcements/active', (req, res) => {
-  const announcements = db.prepare('SELECT * FROM announcements WHERE is_active = 1 ORDER BY created_at DESC').all();
+  const announcements = db
+    .prepare('SELECT * FROM announcements WHERE store_id = ? AND is_active = 1 ORDER BY created_at DESC')
+    .all(req.store.id);
   res.json({ announcements: announcements.map((a) => ({ id: a.id, message: a.message })) });
 });
 

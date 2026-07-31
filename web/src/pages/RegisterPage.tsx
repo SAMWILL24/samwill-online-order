@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 export function RegisterPage() {
-  const { register } = useApp();
+  const { storeSlug, register } = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -18,7 +18,7 @@ export function RegisterPage() {
     setError(null);
     try {
       await register(email, password, name, phone);
-      navigate('/menu');
+      navigate(`/${storeSlug}/menu`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -45,7 +45,7 @@ export function RegisterPage() {
         Create Account
       </button>
       <p className="muted">
-        Already have an account? <Link to="/login">Log in</Link>
+        Already have an account? <Link to={`/${storeSlug}/login`}>Log in</Link>
       </p>
     </form>
   );

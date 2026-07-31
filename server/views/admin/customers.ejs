@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Customers - SAMWILL Kitchen Admin</title>
-  <%- include('_sidebar', { section, page, adminEmail }) %>
+  <%- include('_sidebar', { section, page, adminEmail, store }) %>
 
   <h1>Customers</h1>
   <div class="card">
@@ -16,10 +16,11 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     function money(cents) { return '$' + (cents / 100).toFixed(2); }
 
     async function load() {
-      const res = await fetch('/admin/api/customers');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/customers`);
       const data = await res.json();
       document.getElementById('rows').innerHTML = data.customers.map(c => `
         <tr>

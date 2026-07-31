@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { api } from '../api';
 import { formatCents } from '../lib/money';
 import { StripePaymentForm } from '../components/StripePaymentForm';
 import type { RestaurantSettings } from '../types';
@@ -9,7 +8,7 @@ import type { RestaurantSettings } from '../types';
 const TIP_PRESETS = [0, 10, 15, 20];
 
 export function CheckoutPage() {
-  const { cart, orderType, requestedTime, customer, clearCart } = useApp();
+  const { storeSlug, api, cart, orderType, requestedTime, customer, clearCart } = useApp();
   const navigate = useNavigate();
 
   const [guestName, setGuestName] = useState('');
@@ -29,7 +28,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {});
-  }, []);
+  }, [api]);
 
   const subtotalCents = cart.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
   const tipCents = Math.round((subtotalCents * tipPercent) / 100);
@@ -73,7 +72,7 @@ export function CheckoutPage() {
       } else {
         setPaymentNote(res.payment.note || null);
         clearCart();
-        navigate(`/order/${res.order.id}`);
+        navigate(`/${storeSlug}/order/${res.order.id}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to place order');
@@ -84,7 +83,7 @@ export function CheckoutPage() {
 
   function handlePaid() {
     clearCart();
-    if (orderId) navigate(`/order/${orderId}`);
+    if (orderId) navigate(`/${storeSlug}/order/${orderId}`);
   }
 
   if (cart.length === 0) {

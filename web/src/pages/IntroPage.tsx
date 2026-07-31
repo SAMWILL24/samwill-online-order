@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { api } from '../api';
 import type { RestaurantSettings } from '../types';
 import { PromotionsBanner } from '../components/PromotionsBanner';
 import { AnnouncementsBanner } from '../components/AnnouncementsBanner';
@@ -14,7 +13,7 @@ function firstEnabledType(s: RestaurantSettings): 'pickup' | 'delivery' | 'curbs
 }
 
 export function IntroPage() {
-  const { orderType, setOrderType, requestedTime, setRequestedTime } = useApp();
+  const { storeSlug, api, orderType, setOrderType, requestedTime, setRequestedTime } = useApp();
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [schedule, setSchedule] = useState<'asap' | 'future'>(requestedTime === 'ASAP' ? 'asap' : 'future');
   const [futureTime, setFutureTime] = useState('');
@@ -36,7 +35,7 @@ export function IntroPage() {
 
   function handleViewMenu() {
     setRequestedTime(schedule === 'asap' ? 'ASAP' : futureTime || 'ASAP');
-    navigate('/menu');
+    navigate(`/${storeSlug}/menu`);
   }
 
   const hoursToday = orderType === 'delivery' ? settings?.deliveryHoursToday : settings?.pickupHoursToday;

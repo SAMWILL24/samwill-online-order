@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Payments - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .status-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.9rem; border-radius: 999px; font-size: 0.9rem; font-weight: 600; }
     .status-pill.ok { background: rgba(43,107,63,0.25); color: #4ade80; }
@@ -13,10 +13,10 @@
 
   <h1>Settings</h1>
   <div class="tabs">
-    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
-    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
-    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
-    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+    <a href="/<%= store.slug %>/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/<%= store.slug %>/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/<%= store.slug %>/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/<%= store.slug %>/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
   </div>
 
   <div class="card">
@@ -30,8 +30,9 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     async function load() {
-      const res = await fetch('/admin/api/payments-status');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/payments-status`);
       const data = await res.json();
       const el = document.getElementById('status');
       if (data.stripeConfigured) {

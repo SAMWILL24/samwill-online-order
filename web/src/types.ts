@@ -127,6 +127,7 @@ export interface OrderItem {
 
 export interface Order {
   id: number;
+  storeId: number;
   type: 'pickup' | 'delivery' | 'curbside';
   status: string;
   requestedTime: string;

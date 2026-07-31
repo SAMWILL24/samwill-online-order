@@ -1,33 +1,39 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { api, API_URL } from '../api';
+import { useApp } from '../context/AppContext';
+import { API_URL } from '../api';
 import type { Order } from '../types';
 import { formatCents } from '../lib/money';
 
 const STATUS_STEPS = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'];
 
 export function OrderTrackingPage() {
+  const { api } = useApp();
   const { id } = useParams();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
+    let socket: ReturnType<typeof io> | null = null;
+
     api
       .getOrder(Number(id))
-      .then((res) => setOrder(res.order))
+      .then((res) => {
+        setOrder(res.order);
+        socket = API_URL ? io(API_URL) : io();
+        socket.on('connect', () => socket!.emit('join-order', { storeId: res.order.storeId, orderId: Number(id) }));
+        socket.on('order:update', (updated: Order) => {
+          if (String(updated.id) === id) setOrder(updated);
+        });
+      })
       .catch((err) => setError(err.message));
 
-    const socket = API_URL ? io(API_URL) : io();
-    socket.on('connect', () => socket.emit('join-order', id));
-    socket.on('order:update', (updated: Order) => {
-      if (String(updated.id) === id) setOrder(updated);
-    });
     return () => {
-      socket.disconnect();
+      socket?.disconnect();
     };
-  }, [id]);
+  }, [id, api]);
 
   if (error) return <p className="error">{error}</p>;
   if (!order) return <div className="loading">Loading order…</div>;

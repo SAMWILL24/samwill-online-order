@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Restaurant Profile - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
@@ -16,10 +16,10 @@
 
   <h1>Settings</h1>
   <div class="tabs">
-    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
-    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
-    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
-    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+    <a href="/<%= store.slug %>/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/<%= store.slug %>/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/<%= store.slug %>/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/<%= store.slug %>/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
   </div>
 
   <div class="card top-banner">
@@ -27,7 +27,7 @@
       <input type="checkbox" id="onlineOrderingEnabled" onchange="toggleOnlineOrdering(this.checked)" />
       <label for="onlineOrderingEnabled"><strong>Online ordering enabled</strong> (turn off to pause the whole storefront)</label>
     </div>
-    <a class="btn secondary" href="/admin/marketing/announcements">Post an Announcement</a>
+    <a class="btn secondary" href="/<%= store.slug %>/admin/marketing/announcements">Post an Announcement</a>
   </div>
 
   <div class="card">
@@ -76,8 +76,9 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     async function load() {
-      const res = await fetch('/admin/api/settings');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/settings`);
       const s = await res.json();
       const f = document.getElementById('settings-form');
       f.name.value = s.name;
@@ -94,7 +95,7 @@
     async function save(e) {
       e.preventDefault();
       const f = e.target;
-      await fetch('/admin/api/settings', {
+      await fetch(`/${STORE_SLUG}/admin/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,7 +116,7 @@
     }
 
     async function toggleOnlineOrdering(enabled) {
-      await fetch('/admin/api/settings', {
+      await fetch(`/${STORE_SLUG}/admin/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ onlineOrderingEnabled: enabled }),

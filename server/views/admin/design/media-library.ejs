@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Media Library - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
     .photo-card { background: #17171a; border: 1px solid #2f2f35; border-radius: 8px; overflow: hidden; }
@@ -15,16 +15,17 @@
 
   <h1>Design</h1>
   <div class="tabs">
-    <a href="/admin/design/branding" class="<%= page === 'branding' ? 'active' : '' %>">Branding</a>
-    <a href="/admin/design/media-library" class="<%= page === 'media-library' ? 'active' : '' %>">Media Library</a>
+    <a href="/<%= store.slug %>/admin/design/branding" class="<%= page === 'branding' ? 'active' : '' %>">Branding</a>
+    <a href="/<%= store.slug %>/admin/design/media-library" class="<%= page === 'media-library' ? 'active' : '' %>">Media Library</a>
   </div>
   <p class="muted">Photos uploaded via Menu &rarr; Items. Delete unused ones to free up space.</p>
 
   <div class="photo-grid" id="grid"></div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     async function load() {
-      const res = await fetch('/admin/api/photos');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/photos`);
       const data = await res.json();
       const grid = document.getElementById('grid');
       grid.innerHTML = data.photos.map(p => `
@@ -43,7 +44,7 @@
 
     async function remove(filename) {
       if (!confirm('Delete this photo?')) return;
-      await fetch('/admin/api/photos/' + encodeURIComponent(filename), { method: 'DELETE' });
+      await fetch(`/${STORE_SLUG}/admin/api/photos/` + encodeURIComponent(filename), { method: 'DELETE' });
       load();
     }
 

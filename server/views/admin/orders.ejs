@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Orders - SAMWILL Kitchen Admin</title>
-  <%- include('_sidebar', { section, page, adminEmail }) %>
+  <%- include('_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .order-card { display: flex; justify-content: space-between; gap: 1rem; }
     .order-card .status { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 999px; background: #35353c; }
@@ -23,14 +23,16 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    const STORE_ID = <%= store.id %>;
+    const STORE_SLUG = '<%= store.slug %>';
     const socket = io();
-    socket.on('connect', () => socket.emit('join-admin'));
+    socket.on('connect', () => socket.emit('join-admin', { storeId: STORE_ID }));
 
     const STATUS_FLOW = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'];
     let orders = [];
 
     async function loadOrders() {
-      const res = await fetch('/admin/api/orders');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/orders`);
       const data = await res.json();
       orders = data.orders;
       render();
@@ -78,7 +80,7 @@
     }
 
     async function updateStatus(id, status) {
-      await fetch(`/admin/api/orders/${id}`, {
+      await fetch(`/${STORE_SLUG}/admin/api/orders/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),

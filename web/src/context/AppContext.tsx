@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { CartLine, Customer, DeliveryAddress } from '../types';
-import { api } from '../api';
+import { createApi } from '../api';
 
 type OrderType = 'pickup' | 'delivery' | 'curbside';
 
 interface AppState {
+  storeSlug: string;
+  api: ReturnType<typeof createApi>;
   orderType: OrderType;
   setOrderType: (t: OrderType) => void;
   requestedTime: string; // 'ASAP' or a formatted future time
@@ -25,31 +27,47 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-function loadJSON<T>(key: string, fallback: T): T {
+// Every key is namespaced by store slug: two different restaurants opened in the same
+// browser must never share a cart, login session, or order-type preference.
+function storageKey(storeSlug: string, key: string) {
+  return `${key}:${storeSlug}`;
+}
+
+function loadJSON<T>(storeSlug: string, key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(storageKey(storeSlug, key));
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
 }
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [orderType, setOrderTypeState] = useState<OrderType>(() => loadJSON('orderType', 'pickup'));
-  const [requestedTime, setRequestedTimeState] = useState<string>(() => loadJSON('requestedTime', 'ASAP'));
-  const [cart, setCart] = useState<CartLine[]>(() => loadJSON('cart', []));
-  const [deliveryAddress, setDeliveryAddressState] = useState<DeliveryAddress | null>(() => loadJSON('deliveryAddress', null));
-  const [customer, setCustomer] = useState<Customer | null>(() => loadJSON('customer', null));
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('customerToken'));
+export function AppProvider({ storeSlug, children }: { storeSlug: string; children: ReactNode }) {
+  const api = useMemo(() => createApi(storeSlug), [storeSlug]);
 
-  useEffect(() => localStorage.setItem('orderType', JSON.stringify(orderType)), [orderType]);
-  useEffect(() => localStorage.setItem('requestedTime', JSON.stringify(requestedTime)), [requestedTime]);
-  useEffect(() => localStorage.setItem('cart', JSON.stringify(cart)), [cart]);
-  useEffect(() => localStorage.setItem('deliveryAddress', JSON.stringify(deliveryAddress)), [deliveryAddress]);
+  const [orderType, setOrderTypeState] = useState<OrderType>(() => loadJSON(storeSlug, 'orderType', 'pickup'));
+  const [requestedTime, setRequestedTimeState] = useState<string>(() => loadJSON(storeSlug, 'requestedTime', 'ASAP'));
+  const [cart, setCart] = useState<CartLine[]>(() => loadJSON(storeSlug, 'cart', []));
+  const [deliveryAddress, setDeliveryAddressState] = useState<DeliveryAddress | null>(() =>
+    loadJSON(storeSlug, 'deliveryAddress', null)
+  );
+  const [customer, setCustomer] = useState<Customer | null>(() => loadJSON(storeSlug, 'customer', null));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(storageKey(storeSlug, 'customerToken')));
+
+  useEffect(() => localStorage.setItem(storageKey(storeSlug, 'orderType'), JSON.stringify(orderType)), [storeSlug, orderType]);
+  useEffect(
+    () => localStorage.setItem(storageKey(storeSlug, 'requestedTime'), JSON.stringify(requestedTime)),
+    [storeSlug, requestedTime]
+  );
+  useEffect(() => localStorage.setItem(storageKey(storeSlug, 'cart'), JSON.stringify(cart)), [storeSlug, cart]);
+  useEffect(
+    () => localStorage.setItem(storageKey(storeSlug, 'deliveryAddress'), JSON.stringify(deliveryAddress)),
+    [storeSlug, deliveryAddress]
+  );
   useEffect(() => {
-    if (customer) localStorage.setItem('customer', JSON.stringify(customer));
-    else localStorage.removeItem('customer');
-  }, [customer]);
+    if (customer) localStorage.setItem(storageKey(storeSlug, 'customer'), JSON.stringify(customer));
+    else localStorage.removeItem(storageKey(storeSlug, 'customer'));
+  }, [storeSlug, customer]);
 
   const setOrderType = (t: OrderType) => setOrderTypeState(t);
   const setRequestedTime = (t: string) => setRequestedTimeState(t);
@@ -69,22 +87,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const res = await api.login(email, password);
     setToken(res.token);
     setCustomer(res.customer);
-    localStorage.setItem('customerToken', res.token);
+    localStorage.setItem(storageKey(storeSlug, 'customerToken'), res.token);
   };
   const register = async (email: string, password: string, name: string, phone?: string) => {
     const res = await api.register(email, password, name, phone);
     setToken(res.token);
     setCustomer(res.customer);
-    localStorage.setItem('customerToken', res.token);
+    localStorage.setItem(storageKey(storeSlug, 'customerToken'), res.token);
   };
   const logout = () => {
     setToken(null);
     setCustomer(null);
-    localStorage.removeItem('customerToken');
+    localStorage.removeItem(storageKey(storeSlug, 'customerToken'));
   };
 
   const value = useMemo<AppState>(
     () => ({
+      storeSlug,
+      api,
       orderType,
       setOrderType,
       requestedTime,
@@ -102,7 +122,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       register,
       logout,
     }),
-    [orderType, requestedTime, cart, deliveryAddress, customer, token]
+    [storeSlug, api, orderType, requestedTime, cart, deliveryAddress, customer, token]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

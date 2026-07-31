@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Order Channels - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .channel-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 0; border-top: 1px solid #2a2a30; }
     .channel-row:first-child { border-top: none; }
@@ -16,10 +16,10 @@
 
   <h1>Settings</h1>
   <div class="tabs">
-    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
-    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
-    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
-    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+    <a href="/<%= store.slug %>/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/<%= store.slug %>/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/<%= store.slug %>/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/<%= store.slug %>/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
   </div>
   <p class="muted">How your staff finds out about a new order.</p>
 
@@ -27,7 +27,7 @@
     <div class="channel-row">
       <div>
         <div class="channel-name">Order Dashboard</div>
-        <div class="channel-desc">New orders appear instantly on the <a href="/admin/orders">Orders</a> screen, with a sound alert - this is fully set up and active.</div>
+        <div class="channel-desc">New orders appear instantly on the <a href="/<%= store.slug %>/admin/orders">Orders</a> screen, with a sound alert - this is fully set up and active.</div>
       </div>
       <span class="badge active">Active</span>
     </div>

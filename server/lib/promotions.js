@@ -31,15 +31,15 @@ function discountForSubtotal(promo, subtotalCents) {
   return Math.min(raw, subtotalCents);
 }
 
-function getActivePromotions() {
-  const all = db.prepare('SELECT * FROM promotions WHERE is_active = 1').all();
+function getActivePromotions(storeId) {
+  const all = db.prepare('SELECT * FROM promotions WHERE store_id = ? AND is_active = 1').all(storeId);
   const now = new Date();
   return all.filter((p) => isActiveNow(p, now));
 }
 
 // Returns the single best (largest discount) auto-applying promotion for this subtotal, or null.
-function getBestAutoPromotion(subtotalCents) {
-  const active = getActivePromotions().filter((p) => p.auto_apply);
+function getBestAutoPromotion(storeId, subtotalCents) {
+  const active = getActivePromotions(storeId).filter((p) => p.auto_apply);
   let best = null;
   let bestDiscount = 0;
   for (const promo of active) {
@@ -52,8 +52,8 @@ function getBestAutoPromotion(subtotalCents) {
   return best ? { promotion: best, discountCents: bestDiscount } : null;
 }
 
-function validatePromoCode(code, subtotalCents) {
-  const promo = db.prepare('SELECT * FROM promotions WHERE code = ?').get(code);
+function validatePromoCode(storeId, code, subtotalCents) {
+  const promo = db.prepare('SELECT * FROM promotions WHERE store_id = ? AND code = ?').get(storeId, code);
   if (!promo) throw new PromotionError('Invalid promo code');
   if (!isActiveNow(promo)) throw new PromotionError('This promo code is not currently active');
   const discountCents = discountForSubtotal(promo, subtotalCents);
@@ -65,12 +65,12 @@ function validatePromoCode(code, subtotalCents) {
 
 // Resolves the best available discount: an entered code takes priority over automatic deals,
 // but we still fall back to the best auto-apply promotion if no code was entered.
-function resolveDiscount(subtotalCents, promoCode) {
+function resolveDiscount(storeId, subtotalCents, promoCode) {
   if (promoCode) {
-    const { promotion, discountCents } = validatePromoCode(promoCode, subtotalCents);
+    const { promotion, discountCents } = validatePromoCode(storeId, promoCode, subtotalCents);
     return { promotion, discountCents, source: 'code' };
   }
-  const auto = getBestAutoPromotion(subtotalCents);
+  const auto = getBestAutoPromotion(storeId, subtotalCents);
   return auto ? { ...auto, source: 'auto' } : { promotion: null, discountCents: 0, source: null };
 }
 

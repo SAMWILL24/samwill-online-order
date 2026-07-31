@@ -1,17 +1,35 @@
 const db = require('../db');
 const { toAbsoluteUrl } = require('./url');
 
-function getFullMenu({ includeInactive = false } = {}) {
-  const categories = db.prepare('SELECT * FROM categories ORDER BY sort_order, id').all();
+function getFullMenu(storeId, { includeInactive = false } = {}) {
+  const categories = db.prepare('SELECT * FROM categories WHERE store_id = ? ORDER BY sort_order, id').all(storeId);
+  const categoryIds = categories.map((c) => c.id);
+  if (categoryIds.length === 0) return [];
+  const placeholders = categoryIds.map(() => '?').join(',');
+
   const items = includeInactive
-    ? db.prepare('SELECT * FROM menu_items ORDER BY sort_order, id').all()
-    : db.prepare('SELECT * FROM menu_items WHERE is_active = 1 ORDER BY sort_order, id').all();
-  const sizes = db.prepare('SELECT * FROM item_sizes ORDER BY sort_order, id').all();
-  const links = db
-    .prepare('SELECT * FROM menu_item_extra_groups ORDER BY sort_order, id')
-    .all();
-  const groupsById = groupById(db.prepare('SELECT * FROM extra_groups').all());
-  const extras = db.prepare('SELECT * FROM extras ORDER BY sort_order, id').all();
+    ? db.prepare(`SELECT * FROM menu_items WHERE category_id IN (${placeholders}) ORDER BY sort_order, id`).all(...categoryIds)
+    : db
+        .prepare(`SELECT * FROM menu_items WHERE category_id IN (${placeholders}) AND is_active = 1 ORDER BY sort_order, id`)
+        .all(...categoryIds);
+  const itemIds = items.map((i) => i.id);
+  const itemPlaceholders = itemIds.map(() => '?').join(',');
+
+  const sizes = itemIds.length
+    ? db.prepare(`SELECT * FROM item_sizes WHERE menu_item_id IN (${itemPlaceholders}) ORDER BY sort_order, id`).all(...itemIds)
+    : [];
+  const links = itemIds.length
+    ? db
+        .prepare(`SELECT * FROM menu_item_extra_groups WHERE menu_item_id IN (${itemPlaceholders}) ORDER BY sort_order, id`)
+        .all(...itemIds)
+    : [];
+  const groupsById = groupById(db.prepare('SELECT * FROM extra_groups WHERE store_id = ?').all(storeId));
+  const groupIds = Object.keys(groupsById);
+  const extras = groupIds.length
+    ? db
+        .prepare(`SELECT * FROM extras WHERE extra_group_id IN (${groupIds.map(() => '?').join(',')}) ORDER BY sort_order, id`)
+        .all(...groupIds)
+    : [];
 
   const sizesByItem = groupBy(sizes, 'menu_item_id');
   const linksByItem = groupBy(links, 'menu_item_id');

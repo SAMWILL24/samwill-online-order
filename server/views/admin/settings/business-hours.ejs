@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Business Hours - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .hours-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
     .hours-table th { text-align: left; font-size: 0.75rem; text-transform: uppercase; color: #999; padding: 0.5rem; border-bottom: 1px solid #2a2a30; }
@@ -15,10 +15,10 @@
 
   <h1>Settings</h1>
   <div class="tabs">
-    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
-    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
-    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
-    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+    <a href="/<%= store.slug %>/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/<%= store.slug %>/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/<%= store.slug %>/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/<%= store.slug %>/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
   </div>
 
   <div class="card">
@@ -38,11 +38,12 @@
   <span id="saved" style="color:#8bc98b; display:none;">Saved.</span>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const state = { pickup: [], delivery: [] };
 
     async function load(type) {
-      const res = await fetch('/admin/api/business-hours?type=' + type);
+      const res = await fetch(`/${STORE_SLUG}/admin/api/business-hours?type=` + type);
       const data = await res.json();
       state[type] = data.days;
       render(type);
@@ -82,7 +83,7 @@
     }
 
     async function saveHours(type) {
-      await fetch('/admin/api/business-hours', {
+      await fetch(`/${STORE_SLUG}/admin/api/business-hours`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, days: state[type] }),

@@ -29,8 +29,8 @@ router.post('/stripe', (req, res) => {
       const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
       if (order) {
         const io = req.app.get('io');
-        io.to(`order:${orderId}`).emit('order:update', serializeOrder(order));
-        io.to('admin').emit('order:update', serializeOrder(order));
+        io.to(`order:${order.store_id}:${orderId}`).emit('order:update', serializeOrder(order));
+        io.to(`admin:${order.store_id}`).emit('order:update', serializeOrder(order));
       }
     }
   }

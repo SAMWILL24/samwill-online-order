@@ -39,6 +39,7 @@ function serializeOrder(order) {
 
   return {
     id: order.id,
+    storeId: order.store_id,
     type: order.type,
     status: order.status,
     requestedTime: order.requested_time,
@@ -72,6 +73,7 @@ function serializeOrder(order) {
 
 router.post('/', optionalCustomerAuth, async (req, res) => {
   const { type, requestedTime, cart, guest, address, tipCents, notes, promoCode, redeemPoints: requestedPoints } = req.body || {};
+  const storeId = req.store.id;
 
   if (!VALID_TYPES.includes(type)) {
     return res.status(400).json({ error: 'type must be "pickup" or "delivery"' });
@@ -88,7 +90,7 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
 
   let priced;
   try {
-    priced = priceCart(cart, type);
+    priced = priceCart(storeId, cart, type);
   } catch (err) {
     if (err instanceof OrderValidationError) return res.status(400).json({ error: err.message });
     throw err;
@@ -96,7 +98,7 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
 
   let discount;
   try {
-    discount = resolveDiscount(priced.subtotalCents, promoCode);
+    discount = resolveDiscount(storeId, priced.subtotalCents, promoCode);
   } catch (err) {
     if (err instanceof PromotionError) return res.status(400).json({ error: err.message });
     throw err;
@@ -127,11 +129,12 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
     const orderInfo = db
       .prepare(
         `INSERT INTO orders
-          (customer_id, guest_name, guest_email, guest_phone, type, requested_time, subtotal_cents, delivery_fee_cents, tax_cents, tip_cents, total_cents, address_id, notes,
+          (store_id, customer_id, guest_name, guest_email, guest_phone, type, requested_time, subtotal_cents, delivery_fee_cents, tax_cents, tip_cents, total_cents, address_id, notes,
            promotion_id, promo_code_entered, promotion_discount_cents, loyalty_redeem_cents, loyalty_points_redeemed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
+        storeId,
         req.customerId || null,
         req.customerId ? null : guest.name,
         req.customerId ? null : guest.email,
@@ -208,7 +211,7 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
       const paymentIntent = await stripe.paymentIntents.create({
         amount: totalCents,
         currency: 'usd',
-        metadata: { orderId: String(orderId) },
+        metadata: { orderId: String(orderId), storeId: String(storeId) },
         automatic_payment_methods: { enabled: true },
       });
       db.prepare('UPDATE orders SET payment_intent_id = ? WHERE id = ?').run(paymentIntent.id, orderId);
@@ -221,7 +224,7 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   const io = req.app.get('io');
-  io.to('admin').emit('order:new', serializeOrder(order));
+  io.to(`admin:${storeId}`).emit('order:new', serializeOrder(order));
 
   res.status(201).json({
     order: serializeOrder(order),
@@ -232,7 +235,7 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
 });
 
 router.post('/:id/confirm-payment', async (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (!stripeConfigured) return res.status(400).json({ error: 'Stripe is not configured on this server' });
   if (!order.payment_intent_id) return res.status(400).json({ error: 'Order has no associated payment' });
@@ -246,19 +249,21 @@ router.post('/:id/confirm-payment', async (req, res) => {
 
   const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
   const io = req.app.get('io');
-  io.to(`order:${order.id}`).emit('order:update', serializeOrder(updated));
-  io.to('admin').emit('order:update', serializeOrder(updated));
+  io.to(`order:${req.store.id}:${order.id}`).emit('order:update', serializeOrder(updated));
+  io.to(`admin:${req.store.id}`).emit('order:update', serializeOrder(updated));
 
   res.json({ order: serializeOrder(updated) });
 });
 
 router.get('/mine', requireCustomerAuth, (req, res) => {
-  const orders = db.prepare('SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC').all(req.customerId);
+  const orders = db
+    .prepare('SELECT * FROM orders WHERE customer_id = ? AND store_id = ? ORDER BY created_at DESC')
+    .all(req.customerId, req.store.id);
   res.json({ orders: orders.map(serializeOrder) });
 });
 
 router.get('/:id', optionalCustomerAuth, (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (order.customer_id && order.customer_id !== req.customerId) {
     return res.status(403).json({ error: 'Not authorized to view this order' });

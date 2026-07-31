@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Loyalty &amp; Rewards - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
@@ -13,9 +13,9 @@
 
   <h1>Marketing</h1>
   <div class="tabs">
-    <a href="/admin/marketing/coupons" class="<%= page === 'coupons' ? 'active' : '' %>">Coupons</a>
-    <a href="/admin/marketing/loyalty" class="<%= page === 'loyalty' ? 'active' : '' %>">Loyalty &amp; Rewards</a>
-    <a href="/admin/marketing/announcements" class="<%= page === 'announcements' ? 'active' : '' %>">Announcements</a>
+    <a href="/<%= store.slug %>/admin/marketing/coupons" class="<%= page === 'coupons' ? 'active' : '' %>">Coupons</a>
+    <a href="/<%= store.slug %>/admin/marketing/loyalty" class="<%= page === 'loyalty' ? 'active' : '' %>">Loyalty &amp; Rewards</a>
+    <a href="/<%= store.slug %>/admin/marketing/announcements" class="<%= page === 'announcements' ? 'active' : '' %>">Announcements</a>
   </div>
 
   <div class="card">
@@ -41,8 +41,9 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     async function load() {
-      const res = await fetch('/admin/api/settings');
+      const res = await fetch(`/${STORE_SLUG}/admin/api/settings`);
       const s = await res.json();
       const f = document.getElementById('settings-form');
       f.loyaltyEarnRate.value = s.loyalty_earn_rate_per_dollar;
@@ -58,7 +59,7 @@
         loyaltyRedeemValueCents: parseFloat(f.loyaltyRedeemValue.value),
         loyaltyMinRedeemPoints: parseInt(f.loyaltyMinRedeem.value, 10),
       };
-      await fetch('/admin/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      await fetch(`/${STORE_SLUG}/admin/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const saved = document.getElementById('saved');
       saved.style.display = 'inline';
       setTimeout(() => (saved.style.display = 'none'), 1500);

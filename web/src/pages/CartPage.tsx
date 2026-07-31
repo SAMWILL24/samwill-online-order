@@ -2,17 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCents } from '../lib/money';
-import { api } from '../api';
 import type { RestaurantSettings } from '../types';
 
 export function CartPage() {
-  const { cart, updateQuantity, removeFromCart, orderType } = useApp();
+  const { storeSlug, api, cart, updateQuantity, removeFromCart, orderType } = useApp();
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {});
-  }, []);
+  }, [api]);
 
   const subtotalCents = cart.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
   const deliveryFeeCents = orderType === 'delivery' ? settings?.deliveryFeeCents || 0 : 0;
@@ -25,7 +24,7 @@ export function CartPage() {
     return (
       <div className="empty-state">
         <p>Your cart is empty.</p>
-        <Link className="btn btn-primary" to="/menu">
+        <Link className="btn btn-primary" to={`/${storeSlug}/menu`}>
           Browse the menu
         </Link>
       </div>
@@ -92,7 +91,7 @@ export function CartPage() {
         )}
       </div>
 
-      <button className="btn btn-primary btn-lg" disabled={Boolean(belowMinimum)} onClick={() => navigate('/checkout')}>
+      <button className="btn btn-primary btn-lg" disabled={Boolean(belowMinimum)} onClick={() => navigate(`/${storeSlug}/checkout`)}>
         Checkout
       </button>
     </div>

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useApp } from '../context/AppContext';
 import type { Announcement } from '../types';
 
 export function AnnouncementsBanner() {
+  const { api } = useApp();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   useEffect(() => {
     api.getActiveAnnouncements().then((res) => setAnnouncements(res.announcements)).catch(() => {});
-  }, []);
+  }, [api]);
 
   if (announcements.length === 0) return null;
 

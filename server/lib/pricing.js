@@ -2,18 +2,18 @@ const db = require('../db');
 
 class OrderValidationError extends Error {}
 
-function getSettings() {
-  return db.prepare('SELECT * FROM restaurant_settings WHERE id = 1').get();
+function getSettings(storeId) {
+  return db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
 }
 
-function getItemExtraGroups(menuItemId) {
+function getItemExtraGroups(storeId, menuItemId) {
   return db
     .prepare(
       `SELECT eg.* FROM extra_groups eg
        JOIN menu_item_extra_groups mieg ON mieg.extra_group_id = eg.id
-       WHERE mieg.menu_item_id = ?`
+       WHERE mieg.menu_item_id = ? AND eg.store_id = ?`
     )
-    .all(menuItemId);
+    .all(menuItemId, storeId);
 }
 
 function getGroupExtras(groupId) {
@@ -22,8 +22,8 @@ function getGroupExtras(groupId) {
 
 // Validates a set of chosen extra ids against an item's extra groups (min/max per group).
 // Returns the resolved extra rows.
-function validateExtraSelection(menuItem, extraIds) {
-  const groups = getItemExtraGroups(menuItem.id);
+function validateExtraSelection(storeId, menuItem, extraIds) {
+  const groups = getItemExtraGroups(storeId, menuItem.id);
   const chosen = [];
   for (const group of groups) {
     const groupExtras = getGroupExtras(group.id);
@@ -42,8 +42,16 @@ function validateExtraSelection(menuItem, extraIds) {
   return chosen;
 }
 
-function getActiveMenuItem(menuItemId, label) {
-  const item = db.prepare('SELECT * FROM menu_items WHERE id = ? AND is_active = 1').get(menuItemId);
+// Joins through categories to verify the item actually belongs to this store - a
+// menuItemId from another store must never be priceable/orderable here.
+function getActiveMenuItem(storeId, menuItemId) {
+  const item = db
+    .prepare(
+      `SELECT mi.* FROM menu_items mi
+       JOIN categories c ON c.id = mi.category_id
+       WHERE mi.id = ? AND mi.is_active = 1 AND c.store_id = ?`
+    )
+    .get(menuItemId, storeId);
   if (!item) throw new OrderValidationError(`Menu item ${menuItemId} not found`);
   return item;
 }
@@ -52,14 +60,14 @@ function getSize(menuItemId, sizeId) {
   return db.prepare('SELECT * FROM item_sizes WHERE id = ? AND menu_item_id = ?').get(sizeId, menuItemId);
 }
 
-function priceHalfAndHalfLine(line) {
-  const menuItem = getActiveMenuItem(line.menuItemId);
+function priceHalfAndHalfLine(storeId, line) {
+  const menuItem = getActiveMenuItem(storeId, line.menuItemId);
   const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(menuItem.category_id);
   if (!category || !category.supports_half_and_half) {
     throw new OrderValidationError(`${menuItem.name} does not support half & half`);
   }
 
-  const secondMenuItem = getActiveMenuItem(line.halfAndHalf.secondMenuItemId);
+  const secondMenuItem = getActiveMenuItem(storeId, line.halfAndHalf.secondMenuItemId);
   if (secondMenuItem.category_id !== menuItem.category_id) {
     throw new OrderValidationError('Both halves must be from the same category');
   }
@@ -76,10 +84,10 @@ function priceHalfAndHalfLine(line) {
 
   const leftIds = placements.filter((p) => p.half === 'left' || p.half === 'whole').map((p) => p.extraId);
   const rightIds = placements.filter((p) => p.half === 'right' || p.half === 'whole').map((p) => p.extraId);
-  validateExtraSelection(menuItem, leftIds);
-  validateExtraSelection(secondMenuItem, rightIds);
+  validateExtraSelection(storeId, menuItem, leftIds);
+  validateExtraSelection(storeId, secondMenuItem, rightIds);
 
-  const groups = getItemExtraGroups(menuItem.id);
+  const groups = getItemExtraGroups(storeId, menuItem.id);
   const allExtrasById = new Map(groups.flatMap((g) => getGroupExtras(g.id)).map((e) => [e.id, e]));
 
   const resolvedExtras = placements.map((p) => {
@@ -108,23 +116,24 @@ function priceHalfAndHalfLine(line) {
 
 // cartLines: [{ menuItemId, sizeId, quantity, extraIds: [], notes }] or half & half lines
 // (see priceHalfAndHalfLine). Recomputes every price server-side from the DB; never trusts
-// client-sent amounts.
-function priceCart(cartLines, orderType) {
+// client-sent amounts. Every lookup is scoped to storeId so one store's menu/items can
+// never be priced or ordered against another store.
+function priceCart(storeId, cartLines, orderType) {
   if (!Array.isArray(cartLines) || cartLines.length === 0) {
     throw new OrderValidationError('Cart is empty');
   }
 
-  const settings = getSettings();
+  const settings = getSettings(storeId);
   const lines = cartLines.map((line) => {
-    if (line.halfAndHalf) return priceHalfAndHalfLine(line);
+    if (line.halfAndHalf) return priceHalfAndHalfLine(storeId, line);
 
-    const menuItem = getActiveMenuItem(line.menuItemId);
+    const menuItem = getActiveMenuItem(storeId, line.menuItemId);
     const size = getSize(menuItem.id, line.sizeId);
     if (!size) throw new OrderValidationError(`Invalid size for ${menuItem.name}`);
 
     const quantity = Number.isInteger(line.quantity) && line.quantity > 0 ? line.quantity : 1;
     const extraIds = Array.isArray(line.extraIds) ? line.extraIds : [];
-    const chosenExtras = validateExtraSelection(menuItem, extraIds);
+    const chosenExtras = validateExtraSelection(storeId, menuItem, extraIds);
 
     const extrasTotalCents = chosenExtras.reduce((sum, e) => sum + e.price_cents, 0);
     const unitPriceCents = size.price_cents + extrasTotalCents;

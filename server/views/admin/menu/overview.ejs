@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Menu Overview - SAMWILL Kitchen Admin</title>
-  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
   <style>
     .cat-summary { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #2f2f35; padding: 0.9rem 0; }
     .cat-summary:first-child { border-top: none; }
@@ -11,10 +11,10 @@
 
   <h1>Menu</h1>
   <div class="tabs">
-    <a href="/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
-    <a href="/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
-    <a href="/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
-    <a href="/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
+    <a href="/<%= store.slug %>/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
+    <a href="/<%= store.slug %>/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
+    <a href="/<%= store.slug %>/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
+    <a href="/<%= store.slug %>/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
   </div>
 
   <div class="stat-grid" id="totals"></div>
@@ -25,8 +25,9 @@
   </div>
 
   <script>
+    const STORE_SLUG = '<%= store.slug %>';
     async function api(path) {
-      const res = await fetch('/admin/api' + path);
+      const res = await fetch(`/${STORE_SLUG}/admin/api` + path);
       return res.json();
     }
 

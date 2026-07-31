@@ -57,34 +57,35 @@
 </style>
 
 <%
+  const base = `/${store.slug}/admin`;
   const NAV = [
-    { key: 'home', label: 'Home', href: '/admin', icon: 'home' },
-    { key: 'orders', label: 'Orders', href: '/admin/orders', icon: 'orders' },
+    { key: 'home', label: 'Home', href: `${base}`, icon: 'home' },
+    { key: 'orders', label: 'Orders', href: `${base}/orders`, icon: 'orders' },
     { key: 'menu', label: 'Menu', icon: 'menu', items: [
-      { key: 'overview', label: 'Overview', href: '/admin/menu/overview' },
-      { key: 'items', label: 'Items', href: '/admin/menu/items' },
-      { key: 'categories', label: 'Categories', href: '/admin/menu/categories' },
-      { key: 'add-ons', label: 'Add-ons', href: '/admin/menu/add-ons' },
+      { key: 'overview', label: 'Overview', href: `${base}/menu/overview` },
+      { key: 'items', label: 'Items', href: `${base}/menu/items` },
+      { key: 'categories', label: 'Categories', href: `${base}/menu/categories` },
+      { key: 'add-ons', label: 'Add-ons', href: `${base}/menu/add-ons` },
     ]},
     { key: 'marketing', label: 'Marketing', icon: 'marketing', items: [
-      { key: 'coupons', label: 'Coupons', href: '/admin/marketing/coupons' },
-      { key: 'loyalty', label: 'Loyalty & Rewards', href: '/admin/marketing/loyalty' },
-      { key: 'announcements', label: 'Announcements', href: '/admin/marketing/announcements' },
+      { key: 'coupons', label: 'Coupons', href: `${base}/marketing/coupons` },
+      { key: 'loyalty', label: 'Loyalty & Rewards', href: `${base}/marketing/loyalty` },
+      { key: 'announcements', label: 'Announcements', href: `${base}/marketing/announcements` },
     ]},
     { key: 'reporting', label: 'Reporting', icon: 'reporting', items: [
-      { key: 'order-reports', label: 'Order Reports', href: '/admin/reporting/order-reports' },
-      { key: 'analytics', label: 'Analytics', href: '/admin/reporting/analytics' },
+      { key: 'order-reports', label: 'Order Reports', href: `${base}/reporting/order-reports` },
+      { key: 'analytics', label: 'Analytics', href: `${base}/reporting/analytics` },
     ]},
-    { key: 'customers', label: 'Customers', href: '/admin/customers', icon: 'customers' },
+    { key: 'customers', label: 'Customers', href: `${base}/customers`, icon: 'customers' },
     { key: 'design', label: 'Design', icon: 'design', items: [
-      { key: 'branding', label: 'Branding', href: '/admin/design/branding' },
-      { key: 'media-library', label: 'Media Library', href: '/admin/design/media-library' },
+      { key: 'branding', label: 'Branding', href: `${base}/design/branding` },
+      { key: 'media-library', label: 'Media Library', href: `${base}/design/media-library` },
     ]},
     { key: 'settings', label: 'Settings', icon: 'settings', items: [
-      { key: 'restaurant-profile', label: 'Restaurant Profile', href: '/admin/settings/restaurant-profile' },
-      { key: 'business-hours', label: 'Business Hours', href: '/admin/settings/business-hours' },
-      { key: 'order-channels', label: 'Order Channels', href: '/admin/settings/order-channels' },
-      { key: 'payments', label: 'Payments', href: '/admin/settings/payments' },
+      { key: 'restaurant-profile', label: 'Restaurant Profile', href: `${base}/settings/restaurant-profile` },
+      { key: 'business-hours', label: 'Business Hours', href: `${base}/settings/business-hours` },
+      { key: 'order-channels', label: 'Order Channels', href: `${base}/settings/order-channels` },
+      { key: 'payments', label: 'Payments', href: `${base}/settings/payments` },
     ]},
   ];
   const ICONS = {
@@ -103,7 +104,7 @@
 %>
 
 <aside class="admin-sidebar">
-  <div class="sidebar-brand"><img src="/logo.png" alt="SAMWILL" /> SAMWILL Kitchen</div>
+  <div class="sidebar-brand"><img src="/logo.png" alt="SAMWILL" /> <%= store.name %></div>
   <nav class="sidebar-nav">
     <% NAV.forEach(function(item) { %>
       <% const isActiveSection = section === item.key; %>
@@ -134,9 +135,9 @@
 
 <div class="admin-content">
   <header class="admin-topbar">
-    <a class="btn secondary" href="<%= process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',')[0] : 'http://localhost:5173' %>" target="_blank" rel="noopener">View Storefront</a>
+    <a class="btn secondary" href="<%= (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',')[0] : 'http://localhost:5173') + '/' + store.slug %>" target="_blank" rel="noopener">View Storefront</a>
     <div class="spacer"></div>
     <span class="who"><%= adminEmail %></span>
-    <form method="post" action="/admin/logout"><button class="logout" type="submit">Log out</button></form>
+    <form method="post" action="<%= base %>/logout"><button class="logout" type="submit">Log out</button></form>
   </header>
   <main class="admin-main">

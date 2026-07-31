@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 export function LoginPage() {
-  const { login } = useApp();
+  const { storeSlug, login } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      navigate('/menu');
+      navigate(`/${storeSlug}/menu`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -40,7 +40,7 @@ export function LoginPage() {
         Log In
       </button>
       <p className="muted">
-        No account? <Link to="/register">Register</Link>
+        No account? <Link to={`/${storeSlug}/register`}>Register</Link>
       </p>
     </form>
   );
