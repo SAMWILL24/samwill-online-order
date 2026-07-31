@@ -40,6 +40,16 @@ CREATE TABLE IF NOT EXISTS admin_users (
   UNIQUE (store_id, email)
 );
 
+-- Not tied to any single store: a SAMWILL-operator login that can sign in
+-- through any store's admin login page and manage that store, while every
+-- other admin_users account stays scoped to its own store.
+CREATE TABLE IF NOT EXISTS platform_admins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS customers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,

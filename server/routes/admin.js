@@ -19,19 +19,33 @@ const uploadsDir = path.join(dataDir, 'uploads', 'menu');
 // ---- Auth (session-based) ----
 
 router.get('/login', (req, res) => {
-  if (req.session.adminId && req.session.storeId === req.store.id) return res.redirect(`/${req.store.slug}/admin`);
+  if (req.session.adminId && (req.session.isPlatformAdmin || req.session.storeId === req.store.id)) {
+    return res.redirect(`/${req.store.slug}/admin`);
+  }
   res.render('admin/login', { error: null, store: req.store });
 });
 
 router.post('/login', (req, res) => {
   const { email, password } = req.body || {};
+  const normalizedEmail = (email || '').toLowerCase();
+
+  const platformAdmin = db.prepare('SELECT * FROM platform_admins WHERE email = ?').get(normalizedEmail);
+  if (platformAdmin && bcrypt.compareSync(password || '', platformAdmin.password_hash)) {
+    req.session.adminId = platformAdmin.id;
+    req.session.isPlatformAdmin = true;
+    req.session.storeId = req.store.id;
+    req.session.adminEmail = platformAdmin.email;
+    return res.redirect(`/${req.store.slug}/admin`);
+  }
+
   const admin = db
     .prepare('SELECT * FROM admin_users WHERE store_id = ? AND email = ?')
-    .get(req.store.id, (email || '').toLowerCase());
+    .get(req.store.id, normalizedEmail);
   if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
     return res.render('admin/login', { error: 'Invalid email or password', store: req.store });
   }
   req.session.adminId = admin.id;
+  req.session.isPlatformAdmin = false;
   req.session.storeId = req.store.id;
   req.session.adminEmail = admin.email;
   res.redirect(`/${req.store.slug}/admin`);
@@ -47,7 +61,14 @@ router.use(requireAdminAuth);
 // ---- Pages ----
 
 function renderPage(view, section, page) {
-  return (req, res) => res.render(view, { adminEmail: req.session.adminEmail, section, page, store: req.store });
+  return (req, res) =>
+    res.render(view, {
+      adminEmail: req.session.adminEmail,
+      isPlatformAdmin: Boolean(req.session.isPlatformAdmin),
+      section,
+      page,
+      store: req.store,
+    });
 }
 
 router.get('/', renderPage('admin/home', 'home', null));

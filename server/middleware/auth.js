@@ -51,9 +51,14 @@ function requireCustomerAuth(req, res, next) {
 
 // Requires resolveStore to have already run (req.store set). A logged-in session for
 // store A must never authorize actions on store B, even if the admin guesses the URL -
-// so both the admin id AND the matching store id are required.
+// so both the admin id AND the matching store id are required. The one exception is a
+// platform admin (the SAMWILL operator's own login), which is intentionally valid for
+// every store.
 function requireAdminAuth(req, res, next) {
-  if (req.session && req.session.adminId && req.session.storeId === req.store.id) return next();
+  if (req.session && req.session.adminId) {
+    if (req.session.isPlatformAdmin) return next();
+    if (req.session.storeId === req.store.id) return next();
+  }
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Admin authentication required' });
   return res.redirect(`/${req.store.slug}/admin/login`);
 }

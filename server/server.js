@@ -95,7 +95,7 @@ io.on('connection', (socket) => {
   socket.on('join-admin', (payload) => {
     const session = socket.request.session;
     const storeId = payload && payload.storeId;
-    if (session && session.adminId && session.storeId === storeId) {
+    if (session && session.adminId && (session.isPlatformAdmin || session.storeId === storeId)) {
       socket.join(`admin:${storeId}`);
     }
   });
