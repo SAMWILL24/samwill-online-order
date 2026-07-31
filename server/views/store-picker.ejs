@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Staff Login - SAMWILL Online Order</title>
+  <title>Select a Store - SAMWILL Online Order</title>
   <style>
     body { font-family: system-ui, sans-serif; background: linear-gradient(160deg, #ccfbf1 0%, #f4f7f6 45%); color: #1f2937; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
     .card { background: #ffffff; padding: 2rem; border-radius: 12px; width: 340px; box-shadow: 0 8px 30px rgba(16,24,40,0.12); }
@@ -19,14 +19,14 @@
   <div class="card">
     <div class="logo-row">
       <img src="/logo.png" alt="SAMWILL" />
-      <h1>SAMWILL Online &mdash; Staff Login</h1>
+      <h1>SAMWILL Online</h1>
     </div>
-    <p class="muted">Select your restaurant to sign in.</p>
+    <p class="muted">Select a restaurant to manage.</p>
     <% if (stores.length === 0) { %>
       <p class="empty">No stores yet.</p>
     <% } else { %>
       <% stores.forEach((s) => { %>
-        <a class="store-link" href="<%= `/${s.slug}/admin/login` %>"><%= s.name %></a>
+        <a class="store-link" href="<%= `/${s.slug}/admin` %>"><%= s.name %></a>
       <% }) %>
     <% } %>
   </div>

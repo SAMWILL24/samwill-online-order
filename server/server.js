@@ -10,6 +10,7 @@ const SqliteSessionStore = require('better-sqlite3-session-store')(session);
 const { Server } = require('socket.io');
 
 const db = require('./db'); // ensure schema is applied before routes touch it
+const bcrypt = require('bcryptjs');
 const { dataDir } = require('./lib/paths');
 const { resolveStore } = require('./middleware/resolveStore');
 
@@ -59,12 +60,29 @@ app.use('/api/:storeSlug', resolveStore, require('./routes/menu'));
 app.use('/api/:storeSlug/orders', resolveStore, require('./routes/orders').router);
 app.use('/api/:storeSlug/promotions', resolveStore, require('./routes/promotions'));
 
-// Bare /admin (no store slug) is what old links/bookmarks and the samwillmedia.com
-// chooser's "/online" redirect point at. There's no single store anymore, so this
-// just lists active stores and links to each one's real admin login.
+// Bare /admin (no store slug) is what the samwillmedia.com chooser's "/online" link
+// points at. There's no single store anymore, so this is a generic gate: log in with
+// the platform-admin login first, then pick which store to manage. Only platform
+// admins can use this gate (it has no store context to check a per-store admin
+// against) - a per-store admin still signs in at their own /<slug>/admin/login.
 app.get('/admin', (req, res) => {
+  if (!req.session.isPlatformAdmin) {
+    return res.render('admin-gate-login', { error: null });
+  }
   const stores = db.prepare('SELECT slug, name FROM stores WHERE is_active = 1 ORDER BY name').all();
   res.render('store-picker', { stores });
+});
+
+app.post('/admin/login', (req, res) => {
+  const { email, password } = req.body || {};
+  const platformAdmin = db.prepare('SELECT * FROM platform_admins WHERE email = ?').get((email || '').toLowerCase());
+  if (!platformAdmin || !bcrypt.compareSync(password || '', platformAdmin.password_hash)) {
+    return res.render('admin-gate-login', { error: 'Invalid email or password' });
+  }
+  req.session.adminId = platformAdmin.id;
+  req.session.isPlatformAdmin = true;
+  req.session.adminEmail = platformAdmin.email;
+  res.redirect('/admin');
 });
 
 app.use('/:storeSlug/admin', resolveStore, require('./routes/admin'));
