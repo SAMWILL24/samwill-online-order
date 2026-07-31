@@ -13,7 +13,8 @@ const { getWeekHours, setWeekHours } = require('../lib/businessHours');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
-const uploadsDir = path.join(__dirname, '..', 'public', 'uploads', 'menu');
+const { dataDir } = require('../lib/paths');
+const uploadsDir = path.join(dataDir, 'uploads', 'menu');
 
 // ---- Auth (session-based) ----
 

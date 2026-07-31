@@ -10,6 +10,7 @@ const SqliteSessionStore = require('better-sqlite3-session-store')(session);
 const { Server } = require('socket.io');
 
 const db = require('./db'); // ensure schema is applied before routes touch it
+const { dataDir } = require('./lib/paths');
 
 // Comma-separated list in dev (web app + Expo web preview run on different ports);
 // a single origin (or the deployed site's domain) in production.
@@ -44,6 +45,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(dataDir, 'uploads')));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api', require('./routes/menu'));
