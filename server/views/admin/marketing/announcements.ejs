@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Announcements - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .announcement-card { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .badge { display: inline-block; background: #35353c; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.7rem; }
+    .badge.active { background: #2b6b3f; }
+  </style>
+
+  <h1>Marketing</h1>
+  <div class="tabs">
+    <a href="/admin/marketing/coupons" class="<%= page === 'coupons' ? 'active' : '' %>">Coupons</a>
+    <a href="/admin/marketing/loyalty" class="<%= page === 'loyalty' ? 'active' : '' %>">Loyalty &amp; Rewards</a>
+    <a href="/admin/marketing/announcements" class="<%= page === 'announcements' ? 'active' : '' %>">Announcements</a>
+  </div>
+  <p class="muted">Announcements show as a banner at the top of the customer ordering site and app.</p>
+
+  <div class="card">
+    <form class="inline-form" style="display:flex;gap:0.5rem;" onsubmit="return createAnnouncement(event)">
+      <input name="message" placeholder="e.g. Closed for Thanksgiving, Nov 27" required style="flex:1;" />
+      <button class="btn" type="submit">Post Announcement</button>
+    </form>
+  </div>
+
+  <div id="announcements"></div>
+
+  <script>
+    async function api(path, opts) {
+      const res = await fetch('/admin/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Request failed');
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    async function load() {
+      const data = await api('/announcements');
+      const container = document.getElementById('announcements');
+      container.innerHTML = data.announcements.map(a => `
+        <div class="card announcement-card">
+          <div>
+            <span class="badge ${a.is_active ? 'active' : ''}">${a.is_active ? 'Active' : 'Inactive'}</span>
+            <span style="margin-left:0.5rem;">${a.message}</span>
+          </div>
+          <div>
+            <button class="btn secondary" onclick="toggleActive(${a.id}, ${!a.is_active})">${a.is_active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn danger" onclick="remove(${a.id})">Delete</button>
+          </div>
+        </div>
+      `).join('') || '<p class="muted">No announcements yet.</p>';
+    }
+
+    async function createAnnouncement(e) {
+      e.preventDefault();
+      const message = e.target.message.value;
+      await api('/announcements', { method: 'POST', body: JSON.stringify({ message }) });
+      e.target.reset();
+      load();
+      return false;
+    }
+
+    async function toggleActive(id, isActive) {
+      await api('/announcements/' + id, { method: 'PUT', body: JSON.stringify({ isActive }) });
+      load();
+    }
+
+    async function remove(id) {
+      if (!confirm('Delete this announcement?')) return;
+      await api('/announcements/' + id, { method: 'DELETE' });
+      load();
+    }
+
+    load();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

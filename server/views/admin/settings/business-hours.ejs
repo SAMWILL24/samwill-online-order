@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Business Hours - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .hours-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    .hours-table th { text-align: left; font-size: 0.75rem; text-transform: uppercase; color: #999; padding: 0.5rem; border-bottom: 1px solid #2a2a30; }
+    .hours-table td { padding: 0.5rem; border-bottom: 1px solid #24242a; vertical-align: middle; }
+    .hours-table input[type="time"] { width: 130px; }
+    .day-label { font-weight: 600; }
+    .toggle-row { display: flex; align-items: center; gap: 0.4rem; }
+  </style>
+
+  <h1>Settings</h1>
+  <div class="tabs">
+    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Pickup Hours</h3>
+    <table class="hours-table" id="pickup-table"></table>
+    <button class="btn secondary" onclick="applyMondayToRest('pickup')">Apply Monday hours to rest of week</button>
+    <button class="btn" onclick="saveHours('pickup')" style="margin-left:0.5rem;">Save Pickup Hours</button>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Delivery Hours</h3>
+    <table class="hours-table" id="delivery-table"></table>
+    <button class="btn secondary" onclick="applyMondayToRest('delivery')">Apply Monday hours to rest of week</button>
+    <button class="btn" onclick="saveHours('delivery')" style="margin-left:0.5rem;">Save Delivery Hours</button>
+  </div>
+
+  <span id="saved" style="color:#8bc98b; display:none;">Saved.</span>
+
+  <script>
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const state = { pickup: [], delivery: [] };
+
+    async function load(type) {
+      const res = await fetch('/admin/api/business-hours?type=' + type);
+      const data = await res.json();
+      state[type] = data.days;
+      render(type);
+    }
+
+    function render(type) {
+      const table = document.getElementById(type + '-table');
+      table.innerHTML = `
+        <thead><tr><th>Day</th><th>Open</th><th>Opening Time</th><th>Closing Time</th></tr></thead>
+        <tbody>
+          ${state[type].map((d, i) => `
+            <tr>
+              <td class="day-label">${DAY_NAMES[d.dayOfWeek]}</td>
+              <td>
+                <div class="toggle-row">
+                  <input type="checkbox" ${d.isOpen ? 'checked' : ''} onchange="updateDay('${type}', ${i}, 'isOpen', this.checked)" />
+                  <span class="muted">${d.isOpen ? 'Open' : 'Closed'}</span>
+                </div>
+              </td>
+              <td><input type="time" value="${d.openTime}" onchange="updateDay('${type}', ${i}, 'openTime', this.value)" /></td>
+              <td><input type="time" value="${d.closeTime}" onchange="updateDay('${type}', ${i}, 'closeTime', this.value)" /></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      `;
+    }
+
+    function updateDay(type, index, field, value) {
+      state[type][index][field] = value;
+      if (field === 'isOpen') render(type);
+    }
+
+    function applyMondayToRest(type) {
+      const monday = state[type].find((d) => d.dayOfWeek === 1);
+      state[type] = state[type].map((d) => (d.dayOfWeek === 1 ? d : { ...d, isOpen: monday.isOpen, openTime: monday.openTime, closeTime: monday.closeTime }));
+      render(type);
+    }
+
+    async function saveHours(type) {
+      await fetch('/admin/api/business-hours', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, days: state[type] }),
+      });
+      const saved = document.getElementById('saved');
+      saved.style.display = 'inline';
+      setTimeout(() => (saved.style.display = 'none'), 1500);
+    }
+
+    load('pickup');
+    load('delivery');
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

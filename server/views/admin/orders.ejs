@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Orders - SAMWILL Kitchen Admin</title>
+  <%- include('_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .order-card { display: flex; justify-content: space-between; gap: 1rem; }
+    .order-card .status { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 999px; background: #35353c; }
+    .order-items li { font-size: 0.85rem; color: #ccc; }
+    .order-actions select { margin-right: 0.5rem; }
+    .empty { color: #777; text-align: center; padding: 3rem 0; }
+    .badge-new { animation: pulse 1.4s ease-in-out 3; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.6); } 50% { box-shadow: 0 0 0 6px rgba(13,148,136,0); } }
+  </style>
+
+  <h1>Incoming Orders</h1>
+  <div id="orders"></div>
+
+  <audio id="ding" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" type="audio/wav" />
+  </audio>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    socket.on('connect', () => socket.emit('join-admin'));
+
+    const STATUS_FLOW = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'];
+    let orders = [];
+
+    async function loadOrders() {
+      const res = await fetch('/admin/api/orders');
+      const data = await res.json();
+      orders = data.orders;
+      render();
+    }
+
+    function money(cents) { return '$' + (cents / 100).toFixed(2); }
+
+    function render() {
+      const container = document.getElementById('orders');
+      if (!orders.length) {
+        container.innerHTML = '<div class="empty">No active orders right now.</div>';
+        return;
+      }
+      container.innerHTML = orders.map(o => `
+        <div class="card order-card" data-order-id="${o.id}">
+          <div>
+            <strong>Order #${o.id}</strong> &middot; ${o.type} &middot; ${new Date(o.createdAt).toLocaleTimeString()}
+            <div style="color:#999; font-size:0.85rem; margin: 0.25rem 0;">
+              ${o.guest ? o.guest.name + ' &middot; ' + o.guest.phone : 'Registered customer'}
+              ${o.address ? '<br>' + o.address.line1 + ', ' + o.address.city : ''}
+            </div>
+            <ul class="order-items">
+              ${o.items.map(i => {
+                const name = i.isHalfAndHalf ? `Half ${i.menuItemName} / Half ${i.secondMenuItemName}` : i.menuItemName;
+                const extras = i.extras.length
+                  ? ' + ' + i.extras.map(e => i.isHalfAndHalf ? `${e.name} (${e.half})` : e.name).join(', ')
+                  : '';
+                return `<li>${i.quantity}x ${name} (${i.sizeLabel})${extras}</li>`;
+              }).join('')}
+            </ul>
+            ${o.notes ? '<div style="font-size:0.8rem;color:#2dd4bf;">Note: ' + o.notes + '</div>' : ''}
+          </div>
+          <div style="text-align:right;">
+            <div class="status">${o.status.replaceAll('_', ' ')}</div>
+            <div style="margin: 0.5rem 0; font-weight:600;">${money(o.totalCents)}</div>
+            <div style="font-size:0.75rem;color:#999;">payment: ${o.paymentStatus}</div>
+            <div class="order-actions" style="margin-top:0.75rem;">
+              <select onchange="updateStatus(${o.id}, this.value)">
+                ${STATUS_FLOW.concat('cancelled').map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s.replaceAll('_',' ')}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function updateStatus(id, status) {
+      await fetch(`/admin/api/orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    }
+
+    socket.on('order:new', (order) => {
+      orders.unshift(order);
+      render();
+      const card = document.querySelector(`[data-order-id="${order.id}"]`);
+      if (card) card.classList.add('badge-new');
+      document.getElementById('ding').play().catch(() => {});
+    });
+
+    socket.on('order:update', (order) => {
+      const idx = orders.findIndex(o => o.id === order.id);
+      if (idx >= 0) {
+        if (order.status === 'completed' || order.status === 'cancelled') orders.splice(idx, 1);
+        else orders[idx] = order;
+        render();
+      }
+    });
+
+    loadOrders();
+  </script>
+
+  <%- include('_sidebar_close') %>
+</body>
+</html>

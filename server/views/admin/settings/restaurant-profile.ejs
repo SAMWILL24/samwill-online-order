@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Restaurant Profile - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
+    .field input, .field textarea, .field select { width: 100%; max-width: 360px; }
+    .row { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .toggle-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; margin-bottom: 0.75rem; }
+    .order-types label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .top-banner { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+
+  <h1>Settings</h1>
+  <div class="tabs">
+    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+  </div>
+
+  <div class="card top-banner">
+    <div class="toggle-row" style="margin-bottom:0;">
+      <input type="checkbox" id="onlineOrderingEnabled" onchange="toggleOnlineOrdering(this.checked)" />
+      <label for="onlineOrderingEnabled"><strong>Online ordering enabled</strong> (turn off to pause the whole storefront)</label>
+    </div>
+    <a class="btn secondary" href="/admin/marketing/announcements">Post an Announcement</a>
+  </div>
+
+  <div class="card">
+    <form id="settings-form" onsubmit="return save(event)">
+      <div class="row">
+        <div class="field">
+          <label>Restaurant name</label>
+          <input name="name" />
+        </div>
+        <div class="field">
+          <label>Address</label>
+          <input name="address" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Store description <span class="muted">(shown to customers)</span></label>
+        <textarea name="storeDescription" rows="3"></textarea>
+      </div>
+
+      <div class="field order-types">
+        <label style="font-weight:600;color:#ccc;">What order types do you accept?</label>
+        <label><input type="checkbox" name="pickupEnabled" /> Pickup</label>
+        <label><input type="checkbox" name="deliveryEnabled" /> Delivery</label>
+        <label><input type="checkbox" name="curbsideEnabled" /> Curbside</label>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Prep time / notice needed (minutes)</label>
+          <input name="prepTimeMinutes" type="number" step="1" />
+        </div>
+        <div class="field">
+          <label>Order timing</label>
+          <select name="orderMode">
+            <option value="asap_only">ASAP only</option>
+            <option value="advance_only">Scheduled (advance) only</option>
+            <option value="both">Both ASAP &amp; scheduled</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn" type="submit">Save</button>
+      <span id="saved" style="color:#8bc98b; margin-left:0.75rem; display:none;">Saved.</span>
+    </form>
+  </div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/admin/api/settings');
+      const s = await res.json();
+      const f = document.getElementById('settings-form');
+      f.name.value = s.name;
+      f.address.value = s.address;
+      f.storeDescription.value = s.store_description;
+      f.pickupEnabled.checked = Boolean(s.pickup_enabled);
+      f.deliveryEnabled.checked = Boolean(s.delivery_enabled);
+      f.curbsideEnabled.checked = Boolean(s.curbside_enabled);
+      f.prepTimeMinutes.value = s.prep_time_minutes;
+      f.orderMode.value = s.order_mode;
+      document.getElementById('onlineOrderingEnabled').checked = Boolean(s.online_ordering_enabled);
+    }
+
+    async function save(e) {
+      e.preventDefault();
+      const f = e.target;
+      await fetch('/admin/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: f.name.value,
+          address: f.address.value,
+          storeDescription: f.storeDescription.value,
+          pickupEnabled: f.pickupEnabled.checked,
+          deliveryEnabled: f.deliveryEnabled.checked,
+          curbsideEnabled: f.curbsideEnabled.checked,
+          prepTimeMinutes: parseInt(f.prepTimeMinutes.value, 10),
+          orderMode: f.orderMode.value,
+        }),
+      });
+      const saved = document.getElementById('saved');
+      saved.style.display = 'inline';
+      setTimeout(() => (saved.style.display = 'none'), 1500);
+      return false;
+    }
+
+    async function toggleOnlineOrdering(enabled) {
+      await fetch('/admin/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onlineOrderingEnabled: enabled }),
+      });
+    }
+
+    load();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

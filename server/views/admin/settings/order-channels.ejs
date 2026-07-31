@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Order Channels - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .channel-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 0; border-top: 1px solid #2a2a30; }
+    .channel-row:first-child { border-top: none; }
+    .channel-name { font-weight: 600; }
+    .channel-desc { color: #999; font-size: 0.85rem; margin-top: 0.2rem; }
+    .badge { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.2rem 0.6rem; border-radius: 999px; }
+    .badge.active { background: rgba(43,107,63,0.25); color: #4ade80; }
+    .badge.unavailable { background: #35353c; color: #999; }
+  </style>
+
+  <h1>Settings</h1>
+  <div class="tabs">
+    <a href="/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+  </div>
+  <p class="muted">How your staff finds out about a new order.</p>
+
+  <div class="card">
+    <div class="channel-row">
+      <div>
+        <div class="channel-name">Order Dashboard</div>
+        <div class="channel-desc">New orders appear instantly on the <a href="/admin/orders">Orders</a> screen, with a sound alert - this is fully set up and active.</div>
+      </div>
+      <span class="badge active">Active</span>
+    </div>
+    <div class="channel-row">
+      <div>
+        <div class="channel-name">Email / Text Alerts</div>
+        <div class="channel-desc">Send a copy of each new order to an email address or phone number.</div>
+      </div>
+      <span class="badge unavailable">Needs setup</span>
+    </div>
+    <div class="channel-row">
+      <div>
+        <div class="channel-name">Receipt Printer</div>
+        <div class="channel-desc">Automatically print new orders on a kitchen printer.</div>
+      </div>
+      <span class="badge unavailable">Needs setup</span>
+    </div>
+    <div class="channel-row">
+      <div>
+        <div class="channel-name">POS Integration</div>
+        <div class="channel-desc">Send orders directly into a point-of-sale system.</div>
+      </div>
+      <span class="badge unavailable">Needs setup</span>
+    </div>
+  </div>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

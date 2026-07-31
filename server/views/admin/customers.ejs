@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Customers - SAMWILL Kitchen Admin</title>
+  <%- include('_sidebar', { section, page, adminEmail }) %>
+
+  <h1>Customers</h1>
+  <div class="card">
+    <table class="admin-table">
+      <thead>
+        <tr><th>Name</th><th>Email</th><th>Phone</th><th>Orders</th><th>Lifetime Spend</th><th>Loyalty Points</th><th>Joined</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    function money(cents) { return '$' + (cents / 100).toFixed(2); }
+
+    async function load() {
+      const res = await fetch('/admin/api/customers');
+      const data = await res.json();
+      document.getElementById('rows').innerHTML = data.customers.map(c => `
+        <tr>
+          <td>${c.name}</td>
+          <td>${c.email}</td>
+          <td>${c.phone || ''}</td>
+          <td>${c.orderCount}</td>
+          <td>${money(c.lifetimeSpendCents)}</td>
+          <td>${c.loyaltyPoints}</td>
+          <td>${new Date(c.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="7" class="muted">No registered customers yet.</td></tr>';
+    }
+
+    load();
+  </script>
+
+  <%- include('_sidebar_close') %>
+</body>
+</html>

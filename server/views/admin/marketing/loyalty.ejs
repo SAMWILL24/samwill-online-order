@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Loyalty &amp; Rewards - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
+    .field input { width: 100%; max-width: 280px; }
+    .row { display: flex; gap: 2rem; flex-wrap: wrap; }
+  </style>
+
+  <h1>Marketing</h1>
+  <div class="tabs">
+    <a href="/admin/marketing/coupons" class="<%= page === 'coupons' ? 'active' : '' %>">Coupons</a>
+    <a href="/admin/marketing/loyalty" class="<%= page === 'loyalty' ? 'active' : '' %>">Loyalty &amp; Rewards</a>
+    <a href="/admin/marketing/announcements" class="<%= page === 'announcements' ? 'active' : '' %>">Announcements</a>
+  </div>
+
+  <div class="card">
+    <p class="muted">Registered customers earn points on every order and can redeem them for a discount at checkout.</p>
+    <form id="settings-form" onsubmit="return save(event)">
+      <div class="row">
+        <div class="field">
+          <label>Points earned per $1 spent</label>
+          <input name="loyaltyEarnRate" type="number" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Value of 1 point when redeemed (cents)</label>
+          <input name="loyaltyRedeemValue" type="number" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Minimum points to redeem</label>
+          <input name="loyaltyMinRedeem" type="number" step="1" />
+        </div>
+      </div>
+      <button class="btn" type="submit">Save</button>
+      <span id="saved" style="color:#8bc98b; margin-left:0.75rem; display:none;">Saved.</span>
+    </form>
+  </div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/admin/api/settings');
+      const s = await res.json();
+      const f = document.getElementById('settings-form');
+      f.loyaltyEarnRate.value = s.loyalty_earn_rate_per_dollar;
+      f.loyaltyRedeemValue.value = s.loyalty_redeem_value_cents;
+      f.loyaltyMinRedeem.value = s.loyalty_min_redeem_points;
+    }
+
+    async function save(e) {
+      e.preventDefault();
+      const f = e.target;
+      const body = {
+        loyaltyEarnRatePerDollar: parseFloat(f.loyaltyEarnRate.value),
+        loyaltyRedeemValueCents: parseFloat(f.loyaltyRedeemValue.value),
+        loyaltyMinRedeemPoints: parseInt(f.loyaltyMinRedeem.value, 10),
+      };
+      await fetch('/admin/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const saved = document.getElementById('saved');
+      saved.style.display = 'inline';
+      setTimeout(() => (saved.style.display = 'none'), 1500);
+      return false;
+    }
+
+    load();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

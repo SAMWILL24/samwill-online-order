@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Order Reports - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .filters { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: end; margin-bottom: 1rem; }
+    .filters label { display: flex; flex-direction: column; font-size: 0.75rem; color: #999; gap: 0.2rem; }
+  </style>
+
+  <h1>Reporting</h1>
+  <div class="tabs">
+    <a href="/admin/reporting/order-reports" class="<%= page === 'order-reports' ? 'active' : '' %>">Order Reports</a>
+    <a href="/admin/reporting/analytics" class="<%= page === 'analytics' ? 'active' : '' %>">Analytics</a>
+  </div>
+
+  <div class="card">
+    <form class="filters" onsubmit="return applyFilters(event)">
+      <label>From <input name="from" type="date" /></label>
+      <label>To <input name="to" type="date" /></label>
+      <label>Status
+        <select name="status">
+          <option value="">All</option>
+          <option value="placed">Placed</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="preparing">Preparing</option>
+          <option value="ready">Ready</option>
+          <option value="out_for_delivery">Out for delivery</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </label>
+      <button class="btn" type="submit">Filter</button>
+      <button class="btn secondary" type="button" onclick="exportCsv()">Export CSV</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <table class="admin-table">
+      <thead>
+        <tr><th>Order</th><th>Date</th><th>Type</th><th>Status</th><th>Customer</th><th>Subtotal</th><th>Discount</th><th>Delivery Fee</th><th>Gratuity</th><th>Tax</th><th>Total</th><th>Payment</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    function money(cents) { return '$' + (cents / 100).toFixed(2); }
+    function currentQuery() {
+      const f = document.querySelector('.filters');
+      const params = new URLSearchParams();
+      if (f.from.value) params.set('from', f.from.value);
+      if (f.to.value) params.set('to', f.to.value);
+      if (f.status.value) params.set('status', f.status.value);
+      return params;
+    }
+
+    async function loadOrders() {
+      const res = await fetch('/admin/api/reports/orders?' + currentQuery().toString());
+      const data = await res.json();
+      document.getElementById('rows').innerHTML = data.orders.map(o => `
+        <tr>
+          <td>#${o.id}</td>
+          <td>${new Date(o.createdAt).toLocaleString()}</td>
+          <td>${o.type}</td>
+          <td>${o.status.replaceAll('_', ' ')}</td>
+          <td>${o.guest ? o.guest.name : 'Registered customer'}</td>
+          <td>${money(o.subtotalCents)}</td>
+          <td>${money(o.promotionDiscountCents + o.loyaltyRedeemCents)}</td>
+          <td>${money(o.deliveryFeeCents)}</td>
+          <td>${money(o.tipCents)}</td>
+          <td>${money(o.taxCents)}</td>
+          <td>${money(o.totalCents)}</td>
+          <td>${o.paymentStatus}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="12" class="muted">No orders found.</td></tr>';
+    }
+
+    function applyFilters(e) {
+      e.preventDefault();
+      loadOrders();
+      return false;
+    }
+
+    function exportCsv() {
+      const params = currentQuery();
+      params.set('format', 'csv');
+      window.location.href = '/admin/api/reports/orders?' + params.toString();
+    }
+
+    loadOrders();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

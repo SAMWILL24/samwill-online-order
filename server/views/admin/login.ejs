@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin Login - SAMWILL Online Order</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1b1b1f; color: #eee; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    form { background: #26262b; padding: 2rem; border-radius: 12px; width: 320px; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+    h1 { font-size: 1.25rem; margin: 0 0 1.25rem; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #aaa; }
+    input { width: 100%; padding: 0.6rem; margin-bottom: 1rem; border-radius: 6px; border: 1px solid #444; background: #17171a; color: #fff; box-sizing: border-box; }
+    button { width: 100%; padding: 0.7rem; border: none; border-radius: 6px; background: #0d9488; color: #fff; font-weight: 600; cursor: pointer; }
+    button:hover { background: #0f766e; }
+    .error { color: #ff6b6b; font-size: 0.85rem; margin-bottom: 1rem; }
+    .logo-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.25rem; }
+    .logo-row img { height: 36px; width: auto; }
+    .logo-row h1 { font-size: 1.1rem; margin: 0; }
+  </style>
+</head>
+<body>
+  <form method="post" action="/admin/login">
+    <div class="logo-row">
+      <img src="/logo.png" alt="SAMWILL" />
+      <h1>SAMWILL Kitchen &mdash; Staff Login</h1>
+    </div>
+    <% if (error) { %><div class="error"><%= error %></div><% } %>
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required autofocus />
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required />
+    <button type="submit">Log In</button>
+  </form>
+</body>
+</html>

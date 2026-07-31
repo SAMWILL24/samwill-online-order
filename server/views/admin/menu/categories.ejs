@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Categories - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .cat-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #2f2f35; padding: 0.75rem 0; }
+    .cat-row:first-child { border-top: none; }
+    .cat-row .name-input { font-size: 1rem; font-weight: 600; width: 220px; }
+    .inline-form { display: flex; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap; }
+  </style>
+
+  <h1>Menu</h1>
+  <div class="tabs">
+    <a href="/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
+    <a href="/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
+    <a href="/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
+    <a href="/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
+  </div>
+
+  <div class="card">
+    <div id="categories"></div>
+    <form class="inline-form" style="margin-top:1rem;" onsubmit="return addCategory(event)">
+      <input name="name" placeholder="New category name" required />
+      <button class="btn" type="submit">Add Category</button>
+    </form>
+  </div>
+
+  <script>
+    async function api(path, opts) {
+      const res = await fetch('/admin/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Request failed');
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    async function loadCategories() {
+      const data = await api('/menu');
+      render(data.categories);
+    }
+
+    function render(categories) {
+      const container = document.getElementById('categories');
+      container.innerHTML = categories.map(cat => `
+        <div class="cat-row">
+          <div>
+            <input class="name-input" value="${cat.name}" onchange="renameCategory(${cat.id}, this.value)" />
+            <div style="font-size:0.8rem;color:#999;margin-top:0.3rem;">${cat.items.length} item(s)</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <label style="font-size:0.8rem;color:#ccc;display:flex;align-items:center;gap:0.35rem;">
+              <input type="checkbox" ${cat.supportsHalfAndHalf ? 'checked' : ''} onchange="toggleHalfAndHalf(${cat.id}, this.checked)" />
+              Allow Half &amp; Half
+            </label>
+            <button class="btn danger" onclick="deleteCategory(${cat.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function addCategory(e) {
+      e.preventDefault();
+      const name = e.target.name.value;
+      await api('/categories', { method: 'POST', body: JSON.stringify({ name }) });
+      e.target.reset();
+      loadCategories();
+      return false;
+    }
+
+    async function renameCategory(id, name) {
+      await api('/categories/' + id, { method: 'PUT', body: JSON.stringify({ name }) });
+    }
+
+    async function toggleHalfAndHalf(categoryId, supportsHalfAndHalf) {
+      await api('/categories/' + categoryId, { method: 'PUT', body: JSON.stringify({ supportsHalfAndHalf }) });
+    }
+
+    async function deleteCategory(id) {
+      if (!confirm('Delete this category and all its items?')) return;
+      await api('/categories/' + id, { method: 'DELETE' });
+      loadCategories();
+    }
+
+    loadCategories();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

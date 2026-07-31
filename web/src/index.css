@@ -1,0 +1,100 @@
+:root {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --text: #2b2620;
+  --text-muted: #7a7268;
+  --border: #e7e1d6;
+  --accent: #0d9488;
+  --accent-dark: #0f766e;
+  --error: #c0392b;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a17;
+    --surface: #26241f;
+    --text: #f0ece3;
+    --text-muted: #a89f8f;
+    --border: #3a362e;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1, h2, h3, h4 { margin: 0 0 0.5rem; }
+p { margin: 0; }
+
+button, input, textarea, select {
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+input, textarea, select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  width: 100%;
+}
+
+textarea { min-height: 4rem; resize: vertical; }
+
+.muted { color: var(--text-muted); font-size: 0.85rem; }
+.error { color: var(--error); font-size: 0.9rem; }
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+.btn-lg { display: block; width: 100%; padding: 0.9rem; font-size: 1rem; font-weight: 600; margin-top: 1rem; }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.link-btn.danger { color: var(--error); }
+
+.segmented { display: flex; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; }
+.segmented button {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+.segmented button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.segmented-sm { margin: 0.25rem 0 0; }
+.segmented-sm button { flex: initial; padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+.half-extra-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+}
+.half-extra-row:last-child { border-bottom: none; }

@@ -1,0 +1,6 @@
+.DS_Store
+Thumbs.db
+
+# Mobile app has its own separate git repo and its own deploy process
+# (app store builds via Expo EAS) - not part of the web+server Railway service.
+mobile/

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Add-ons - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .group-card { border-top: 1px solid #2f2f35; padding: 0.9rem 0; }
+    .group-card:first-child { border-top: none; }
+    .group-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .group-head input[name="name"] { font-weight: 600; width: 200px; }
+    .chip { display: inline-flex; align-items: center; gap: 0.4rem; background: #17171a; border: 1px solid #333; border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.2rem 0.2rem 0 0; font-size: 0.8rem; }
+    .chip button { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+    .inline-form { display: flex; gap: 0.4rem; margin-top: 0.5rem; flex-wrap: wrap; }
+  </style>
+
+  <h1>Menu</h1>
+  <div class="tabs">
+    <a href="/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
+    <a href="/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
+    <a href="/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
+    <a href="/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
+  </div>
+  <p class="muted">Add-ons (like toppings or dressings) are shared: attach the same add-on to as many menu items as you like from the Items tab, and editing it here updates every item that uses it.</p>
+
+  <div class="card">
+    <div id="groups"></div>
+    <form class="inline-form" onsubmit="return createGroup(event)">
+      <input name="name" placeholder="New add-on name (e.g. Toppings)" required style="width:200px;" />
+      <input name="min" type="number" placeholder="min" value="0" style="width:70px;" />
+      <input name="max" type="number" placeholder="max" value="1" style="width:70px;" />
+      <button class="btn" type="submit">Create Add-on</button>
+    </form>
+  </div>
+
+  <script>
+    async function api(path, opts) {
+      const res = await fetch('/admin/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Request failed');
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    function money(cents) { return (cents / 100).toFixed(2); }
+
+    async function loadGroups() {
+      const data = await api('/extra-groups');
+      render(data.groups);
+    }
+
+    function render(groups) {
+      const container = document.getElementById('groups');
+      if (!groups.length) {
+        container.innerHTML = '<p class="muted">No add-ons yet.</p>';
+        return;
+      }
+      container.innerHTML = groups.map(g => `
+        <div class="group-card">
+          <div class="group-head">
+            <input name="name" value="${g.name}" onchange="renameGroup(${g.id}, this.value, ${g.minSelect}, ${g.maxSelect})" />
+            <label style="font-size:0.8rem;color:#999;">min <input type="number" value="${g.minSelect}" style="width:55px;" onchange="renameGroup(${g.id}, '${g.name}', parseInt(this.value,10), ${g.maxSelect})" /></label>
+            <label style="font-size:0.8rem;color:#999;">max <input type="number" value="${g.maxSelect}" style="width:55px;" onchange="renameGroup(${g.id}, '${g.name}', ${g.minSelect}, parseInt(this.value,10))" /></label>
+            <button class="btn danger" style="margin-left:auto;" onclick="deleteGroup(${g.id})">Delete Add-on</button>
+          </div>
+          <div style="margin-top:0.5rem;">
+            ${g.extras.map(e => `<span class="chip">${e.name}${e.priceCents ? ' +$' + money(e.priceCents) : ''} <button onclick="deleteExtra(${e.id})">&times;</button></span>`).join('')}
+          </div>
+          <form class="inline-form" onsubmit="return addExtra(event, ${g.id})">
+            <input name="name" placeholder="Option name (e.g. Mushroom)" required style="width:160px;" />
+            <input name="price" type="number" step="0.01" placeholder="0.00" style="width:90px;" />
+            <button class="btn secondary" type="submit">Add Option</button>
+          </form>
+        </div>
+      `).join('');
+    }
+
+    async function createGroup(e) {
+      e.preventDefault();
+      const name = e.target.name.value;
+      const minSelect = parseInt(e.target.min.value, 10) || 0;
+      const maxSelect = parseInt(e.target.max.value, 10) || 1;
+      await api('/extra-groups', { method: 'POST', body: JSON.stringify({ name, minSelect, maxSelect }) });
+      e.target.reset();
+      loadGroups();
+      return false;
+    }
+
+    async function renameGroup(id, name, minSelect, maxSelect) {
+      await api('/extra-groups/' + id, { method: 'PUT', body: JSON.stringify({ name, minSelect, maxSelect }) });
+      loadGroups();
+    }
+
+    async function deleteGroup(id) {
+      if (!confirm('Delete this add-on entirely? It will be removed from every item that uses it.')) return;
+      await api('/extra-groups/' + id, { method: 'DELETE' });
+      loadGroups();
+    }
+
+    async function addExtra(e, groupId) {
+      e.preventDefault();
+      const name = e.target.name.value;
+      const priceCents = Math.round((parseFloat(e.target.price.value) || 0) * 100);
+      await api(`/extra-groups/${groupId}/extras`, { method: 'POST', body: JSON.stringify({ name, priceCents }) });
+      loadGroups();
+      return false;
+    }
+
+    async function deleteExtra(id) {
+      await api('/extras/' + id, { method: 'DELETE' });
+      loadGroups();
+    }
+
+    loadGroups();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

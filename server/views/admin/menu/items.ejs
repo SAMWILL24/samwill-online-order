@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Menu Items - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .item-row { border-top: 1px solid #2f2f35; padding: 0.75rem 0; }
+    .item-header { display: flex; justify-content: space-between; align-items: center; }
+    .item-header .name { font-weight: 600; }
+    .item-header .name.inactive { color: #777; text-decoration: line-through; }
+    .item-thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; margin-right: 0.6rem; border: 1px solid #333; }
+    .item-header-main { display: flex; align-items: center; }
+    .image-upload { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .image-preview { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #333; }
+    .image-upload-actions { display: inline-flex; gap: 0.4rem; }
+    .sub { margin-left: 1rem; margin-top: 0.5rem; }
+    .sub h4 { font-size: 0.75rem; text-transform: uppercase; color: #999; margin: 0.5rem 0 0.25rem; }
+    .chip { display: inline-flex; align-items: center; gap: 0.4rem; background: #17171a; border: 1px solid #333; border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.2rem; font-size: 0.8rem; }
+    .chip button { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+    .inline-form { display: flex; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap; }
+    .inline-form input { width: auto; }
+  </style>
+
+  <h1>Menu</h1>
+  <div class="tabs">
+    <a href="/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
+    <a href="/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
+    <a href="/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
+    <a href="/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
+  </div>
+
+  <div id="categories"></div>
+
+  <script>
+    let menu = [];
+    let allGroups = [];
+
+    async function api(path, opts) {
+      const res = await fetch('/admin/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Request failed');
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    async function loadMenu() {
+      const [menuData, groupsData] = await Promise.all([api('/menu'), api('/extra-groups')]);
+      menu = menuData.categories;
+      allGroups = groupsData.groups;
+      render();
+    }
+
+    function money(cents) { return (cents / 100).toFixed(2); }
+
+    function render() {
+      const container = document.getElementById('categories');
+      container.innerHTML = menu.map(cat => `
+        <div class="card">
+          <h2 style="margin:0 0 0.5rem;">${cat.name}</h2>
+
+          ${cat.items.map(item => `
+            <div class="item-row">
+              <div class="item-header">
+                <div class="item-header-main">
+                  <img class="item-thumb" src="${item.imageUrl || ''}" onerror="this.style.visibility='hidden'" />
+                  <div>
+                    <span class="name ${item.isActive ? '' : 'inactive'}">${item.name}</span>
+                    <div style="font-size:0.8rem;color:#999;">${item.description || ''}</div>
+                  </div>
+                </div>
+                <div class="actions">
+                  <button class="btn secondary" onclick="toggleActive(${item.id}, ${!item.isActive})">${item.isActive ? 'Deactivate' : 'Activate'}</button>
+                  <button class="btn danger" onclick="deleteItem(${item.id})">Delete</button>
+                </div>
+              </div>
+
+              <div class="sub">
+                <h4>Image</h4>
+                <div class="image-upload" id="image-upload-${item.id}">
+                  <input type="file" accept="image/*" onchange="handleImageSelect(${item.id}, this)" />
+                  <img class="image-preview" style="display:none;" />
+                  <div class="image-upload-actions" style="display:none;">
+                    <button type="button" class="btn secondary" onclick="saveImage(${item.id})">Save</button>
+                    <button type="button" class="btn" onclick="cancelImage(${item.id})">Cancel</button>
+                  </div>
+                </div>
+
+                <h4>Sizes</h4>
+                ${item.sizes.map(s => `<span class="chip">${s.label} - $${money(s.priceCents)} <button onclick="deleteSize(${s.id})">&times;</button></span>`).join('')}
+                <form class="inline-form" onsubmit="return addSize(event, ${item.id})">
+                  <input name="label" placeholder="Label (e.g. LG)" required style="width:100px;" />
+                  <input name="price" type="number" step="0.01" placeholder="Price" required style="width:100px;" />
+                  <button class="btn secondary" type="submit">Add Size</button>
+                </form>
+
+                <h4>Add-ons <span style="font-size:0.7rem;color:#777;text-transform:none;">(shared - manage full library under Menu &rarr; Add-ons)</span></h4>
+                ${item.extraGroups.map(g => `
+                  <div style="margin-bottom:0.5rem;">
+                    <strong style="font-size:0.85rem;">${g.name}</strong> <span style="font-size:0.75rem;color:#888;">(pick ${g.minSelect}-${g.maxSelect})</span>
+                    <button class="btn secondary" style="padding:0.1rem 0.5rem;font-size:0.7rem;" onclick="detachExtraGroup(${item.id}, ${g.id})">Remove from item</button>
+                  </div>
+                `).join('')}
+
+                ${(() => {
+                  const attachedIds = new Set(item.extraGroups.map(g => g.id));
+                  const available = allGroups.filter(g => !attachedIds.has(g.id));
+                  if (!available.length) return '';
+                  return `
+                    <form class="inline-form" onsubmit="return attachExtraGroup(event, ${item.id})">
+                      <select name="groupId" style="width:200px;">
+                        ${available.map(g => `<option value="${g.id}">${g.name} (${g.extras.length} options)</option>`).join('')}
+                      </select>
+                      <button class="btn secondary" type="submit">Attach Add-on</button>
+                    </form>
+                  `;
+                })()}
+              </div>
+            </div>
+          `).join('')}
+
+          <form class="inline-form" style="margin-top:1rem;" onsubmit="return addItem(event, ${cat.id})">
+            <input name="name" placeholder="New item name" required />
+            <input name="description" placeholder="Description" style="width:220px;" />
+            <button class="btn" type="submit">Add Item</button>
+          </form>
+        </div>
+      `).join('');
+    }
+
+    async function addItem(e, categoryId) {
+      e.preventDefault();
+      const name = e.target.name.value;
+      const description = e.target.description.value;
+      await api('/items', { method: 'POST', body: JSON.stringify({ categoryId, name, description }) });
+      loadMenu();
+      return false;
+    }
+
+    async function deleteItem(id) {
+      if (!confirm('Delete this item?')) return;
+      await api('/items/' + id, { method: 'DELETE' });
+      loadMenu();
+    }
+
+    const pendingImageFiles = {};
+
+    function handleImageSelect(itemId, input) {
+      const file = input.files[0];
+      if (!file) return;
+      pendingImageFiles[itemId] = file;
+      const container = document.getElementById(`image-upload-${itemId}`);
+      const preview = container.querySelector('.image-preview');
+      const actions = container.querySelector('.image-upload-actions');
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = 'inline-block';
+      actions.style.display = 'inline-flex';
+    }
+
+    async function saveImage(itemId) {
+      const file = pendingImageFiles[itemId];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch(`/admin/api/items/${itemId}/image`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Upload failed');
+        return;
+      }
+      delete pendingImageFiles[itemId];
+      loadMenu();
+    }
+
+    function cancelImage(itemId) {
+      delete pendingImageFiles[itemId];
+      const container = document.getElementById(`image-upload-${itemId}`);
+      if (!container) return;
+      const input = container.querySelector('input[type="file"]');
+      const preview = container.querySelector('.image-preview');
+      const actions = container.querySelector('.image-upload-actions');
+      input.value = '';
+      preview.style.display = 'none';
+      preview.removeAttribute('src');
+      actions.style.display = 'none';
+    }
+
+    async function toggleActive(id, isActive) {
+      await api('/items/' + id, { method: 'PUT', body: JSON.stringify({ isActive }) });
+      loadMenu();
+    }
+
+    async function addSize(e, itemId) {
+      e.preventDefault();
+      const label = e.target.label.value;
+      const priceCents = Math.round(parseFloat(e.target.price.value) * 100);
+      await api(`/items/${itemId}/sizes`, { method: 'POST', body: JSON.stringify({ label, priceCents }) });
+      loadMenu();
+      return false;
+    }
+
+    async function deleteSize(id) {
+      await api('/sizes/' + id, { method: 'DELETE' });
+      loadMenu();
+    }
+
+    async function detachExtraGroup(itemId, groupId) {
+      await api(`/items/${itemId}/extra-groups/${groupId}`, { method: 'DELETE' });
+      loadMenu();
+    }
+
+    async function attachExtraGroup(e, itemId) {
+      e.preventDefault();
+      const groupId = e.target.groupId.value;
+      await api(`/items/${itemId}/extra-groups/${groupId}/attach`, { method: 'POST' });
+      loadMenu();
+      return false;
+    }
+
+    loadMenu();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

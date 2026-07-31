@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Home - SAMWILL Kitchen Admin</title>
+  <%- include('_sidebar', { section, page, adminEmail }) %>
+
+  <h1>Home</h1>
+  <div class="stat-grid" id="stats">
+    <div class="stat-card"><div class="label">Today's Orders</div><div class="value">&hellip;</div></div>
+    <div class="stat-card"><div class="label">Today's Revenue</div><div class="value">&hellip;</div></div>
+    <div class="stat-card"><div class="label">Pending Orders</div><div class="value">&hellip;</div></div>
+    <div class="stat-card"><div class="label">Avg. Order Value</div><div class="value">&hellip;</div></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Quick Links</h2>
+    <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+      <a class="btn" href="/admin/orders">View Orders</a>
+      <a class="btn secondary" href="/admin/menu/items">Add Menu Item</a>
+      <a class="btn secondary" href="/admin/marketing/coupons">Create Coupon</a>
+      <a class="btn secondary" href="/admin/reporting/analytics">View Analytics</a>
+    </div>
+  </div>
+
+  <script>
+    function money(cents) { return '$' + (cents / 100).toFixed(2); }
+
+    async function loadStats() {
+      const res = await fetch('/admin/api/reports/summary');
+      const s = await res.json();
+      const cards = document.querySelectorAll('#stats .value');
+      cards[0].textContent = s.todayOrderCount;
+      cards[1].textContent = money(s.todayRevenueCents);
+      cards[2].textContent = s.pendingCount;
+      cards[3].textContent = money(s.avgOrderCents);
+    }
+
+    loadStats();
+  </script>
+
+  <%- include('_sidebar_close') %>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Menu Overview - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .cat-summary { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #2f2f35; padding: 0.9rem 0; }
+    .cat-summary:first-child { border-top: none; }
+  </style>
+
+  <h1>Menu</h1>
+  <div class="tabs">
+    <a href="/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
+    <a href="/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
+    <a href="/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
+    <a href="/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
+  </div>
+
+  <div class="stat-grid" id="totals"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Categories</h2>
+    <div id="categories"></div>
+  </div>
+
+  <script>
+    async function api(path) {
+      const res = await fetch('/admin/api' + path);
+      return res.json();
+    }
+
+    async function load() {
+      const [menuData, groupsData] = await Promise.all([api('/menu'), api('/extra-groups')]);
+      const categories = menuData.categories;
+      const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
+      const activeItems = categories.reduce((sum, c) => sum + c.items.filter(i => i.isActive).length, 0);
+
+      document.getElementById('totals').innerHTML = `
+        <div class="stat-card"><div class="label">Categories</div><div class="value">${categories.length}</div></div>
+        <div class="stat-card"><div class="label">Total Items</div><div class="value">${totalItems}</div></div>
+        <div class="stat-card"><div class="label">Active Items</div><div class="value">${activeItems}</div></div>
+        <div class="stat-card"><div class="label">Add-ons</div><div class="value">${groupsData.groups.length}</div></div>
+      `;
+
+      document.getElementById('categories').innerHTML = categories.map(cat => `
+        <div class="cat-summary">
+          <div>
+            <strong>${cat.name}</strong>
+            ${cat.supportsHalfAndHalf ? '<span class="muted"> &middot; half &amp; half enabled</span>' : ''}
+          </div>
+          <div class="muted">${cat.items.length} item(s) &middot; ${cat.items.filter(i => i.isActive).length} active</div>
+        </div>
+      `).join('') || '<p class="muted">No categories yet - add one under the Categories tab.</p>';
+    }
+
+    load();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>

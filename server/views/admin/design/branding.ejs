@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Branding - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail }) %>
+  <style>
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
+    .color-row { display: flex; align-items: center; gap: 0.75rem; }
+    .color-row input[type="color"] { width: 48px; height: 36px; padding: 0; border: 1px solid #3a3a42; background: none; }
+    .color-row input[type="text"] { width: 120px; }
+    .swatch-preview { display: inline-block; width: 100px; padding: 0.5rem 1rem; border-radius: 6px; color: #fff; text-align: center; font-size: 0.85rem; margin-top: 0.5rem; }
+    .image-slot { display: flex; align-items: center; gap: 1rem; }
+    .image-slot img { max-height: 80px; max-width: 220px; border-radius: 6px; border: 1px solid #333; background: #17171a; }
+    .image-slot .placeholder { width: 220px; height: 60px; border: 1px dashed #3a3a42; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 0.8rem; }
+  </style>
+
+  <h1>Design</h1>
+  <div class="tabs">
+    <a href="/admin/design/branding" class="<%= page === 'branding' ? 'active' : '' %>">Branding</a>
+    <a href="/admin/design/media-library" class="<%= page === 'media-library' ? 'active' : '' %>">Media Library</a>
+  </div>
+
+  <div class="card">
+    <p class="muted">This accent color is used for buttons and highlights across the customer web and mobile ordering apps.</p>
+    <form onsubmit="return saveColor(event)">
+      <div class="field">
+        <label>Accent color</label>
+        <div class="color-row">
+          <input type="color" name="colorPicker" oninput="syncFromPicker(this.value)" />
+          <input type="text" name="colorHex" placeholder="#0d9488" oninput="syncFromHex(this.value)" />
+        </div>
+        <div class="swatch-preview" id="preview" style="background:#0d9488;">Sample Button</div>
+      </div>
+      <button class="btn" type="submit">Save Color</button>
+      <span id="saved-color" style="color:#8bc98b; margin-left:0.75rem; display:none;">Saved.</span>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Ad Image</h3>
+    <p class="muted">A promotional banner image shown on the customer ordering site.</p>
+    <div class="image-slot">
+      <div id="ad-preview"></div>
+      <input type="file" accept="image/*" onchange="uploadBrandingImage('ad', this)" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Header Image</h3>
+    <p class="muted">Replaces the text logo at the top of the customer ordering site.</p>
+    <div class="image-slot">
+      <div id="header-preview"></div>
+      <input type="file" accept="image/*" onchange="uploadBrandingImage('header', this)" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Footer Image</h3>
+    <p class="muted">Shown at the bottom of the customer ordering site.</p>
+    <div class="image-slot">
+      <div id="footer-preview"></div>
+      <input type="file" accept="image/*" onchange="uploadBrandingImage('footer', this)" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Link to Digital Menu</h3>
+    <p class="muted">Optional link to an external menu (PDF or other website).</p>
+    <form onsubmit="return saveDigitalMenuLink(event)">
+      <input type="url" name="digitalMenuUrl" placeholder="https://example.com/menu.pdf" style="width:100%;max-width:400px;" />
+      <button class="btn secondary" type="submit" style="margin-left:0.5rem;">Save</button>
+      <span id="saved-link" style="color:#8bc98b; margin-left:0.75rem; display:none;">Saved.</span>
+    </form>
+  </div>
+
+  <script>
+    function syncFromPicker(value) {
+      document.querySelector('input[name="colorHex"]').value = value;
+      document.getElementById('preview').style.background = value;
+    }
+    function syncFromHex(value) {
+      if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+        document.querySelector('input[name="colorPicker"]').value = value;
+        document.getElementById('preview').style.background = value;
+      }
+    }
+
+    function renderSlot(slot, url) {
+      const el = document.getElementById(slot + '-preview');
+      el.innerHTML = url ? `<img src="${url}" alt="" />` : '<div class="placeholder">No image set</div>';
+    }
+
+    async function load() {
+      const res = await fetch('/admin/api/settings');
+      const s = await res.json();
+      const color = s.theme_accent_color || '#0d9488';
+      document.querySelector('input[name="colorPicker"]').value = color;
+      document.querySelector('input[name="colorHex"]').value = color;
+      document.getElementById('preview').style.background = color;
+      document.querySelector('input[name="digitalMenuUrl"]').value = s.digital_menu_url || '';
+      renderSlot('ad', s.ad_image_url);
+      renderSlot('header', s.header_image_url);
+      renderSlot('footer', s.footer_image_url);
+    }
+
+    async function saveColor(e) {
+      e.preventDefault();
+      const hex = document.querySelector('input[name="colorHex"]').value;
+      await fetch('/admin/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themeAccentColor: hex }),
+      });
+      const saved = document.getElementById('saved-color');
+      saved.style.display = 'inline';
+      setTimeout(() => (saved.style.display = 'none'), 1500);
+      return false;
+    }
+
+    async function uploadBrandingImage(slot, input) {
+      const file = input.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch(`/admin/api/design/${slot}/image`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Upload failed');
+        return;
+      }
+      const body = await res.json();
+      renderSlot(slot, body.imageUrl);
+    }
+
+    async function saveDigitalMenuLink(e) {
+      e.preventDefault();
+      const url = e.target.digitalMenuUrl.value;
+      await fetch('/admin/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ digitalMenuUrl: url }),
+      });
+      const saved = document.getElementById('saved-link');
+      saved.style.display = 'inline';
+      setTimeout(() => (saved.style.display = 'none'), 1500);
+      return false;
+    }
+
+    load();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>
