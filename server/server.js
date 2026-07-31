@@ -59,6 +59,14 @@ app.use('/api/:storeSlug', resolveStore, require('./routes/menu'));
 app.use('/api/:storeSlug/orders', resolveStore, require('./routes/orders').router);
 app.use('/api/:storeSlug/promotions', resolveStore, require('./routes/promotions'));
 
+// Bare /admin (no store slug) is what old links/bookmarks and the samwillmedia.com
+// chooser's "/online" redirect point at. There's no single store anymore, so this
+// just lists active stores and links to each one's real admin login.
+app.get('/admin', (req, res) => {
+  const stores = db.prepare('SELECT slug, name FROM stores WHERE is_active = 1 ORDER BY name').all();
+  res.render('store-picker', { stores });
+});
+
 app.use('/:storeSlug/admin', resolveStore, require('./routes/admin'));
 
 app.get('/', (req, res) => res.json({ ok: true, service: 'samwill-online-order-server' }));
