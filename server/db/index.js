@@ -18,9 +18,27 @@ db.exec(schema);
 // them by hand keeps existing rows (orders, accounts, etc.) intact instead
 // of requiring the database to be wiped and reseeded on every schema change.
 const columnMigrations = [
+  // CardPointe fields never actually made it onto the live stores/orders
+  // tables when that migration shipped - found via scripts/diagnose-schema.js
+  // after a real order failed with "no such column: cardpointe_retref".
+  { table: 'stores', column: 'cardpointe_site', ddl: 'ALTER TABLE stores ADD COLUMN cardpointe_site TEXT' },
+  { table: 'stores', column: 'cardpointe_merchid', ddl: 'ALTER TABLE stores ADD COLUMN cardpointe_merchid TEXT' },
+  { table: 'stores', column: 'cardpointe_username', ddl: 'ALTER TABLE stores ADD COLUMN cardpointe_username TEXT' },
+  { table: 'stores', column: 'cardpointe_password', ddl: 'ALTER TABLE stores ADD COLUMN cardpointe_password TEXT' },
+  {
+    table: 'stores',
+    column: 'cardpointe_testmode',
+    ddl: 'ALTER TABLE stores ADD COLUMN cardpointe_testmode INTEGER NOT NULL DEFAULT 1',
+  },
   { table: 'stores', column: 'kitchen_display_token', ddl: 'ALTER TABLE stores ADD COLUMN kitchen_display_token TEXT' },
   { table: 'stores', column: 'printer_enabled', ddl: "ALTER TABLE stores ADD COLUMN printer_enabled INTEGER NOT NULL DEFAULT 0" },
   { table: 'stores', column: 'printer_key', ddl: 'ALTER TABLE stores ADD COLUMN printer_key TEXT' },
+  { table: 'orders', column: 'cardpointe_retref', ddl: 'ALTER TABLE orders ADD COLUMN cardpointe_retref TEXT' },
+  {
+    table: 'orders',
+    column: 'refunded_cents',
+    ddl: 'ALTER TABLE orders ADD COLUMN refunded_cents INTEGER NOT NULL DEFAULT 0',
+  },
 ];
 
 for (const { table, column, ddl } of columnMigrations) {
