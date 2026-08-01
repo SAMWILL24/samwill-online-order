@@ -2,16 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../db');
 const { dataDir } = require('./paths');
+const r2Backup = require('./r2Backup');
 
 const backupsDir = path.join(dataDir, 'backups');
 const KEEP_COUNT = Number(process.env.BACKUP_KEEP_COUNT) || 7;
 const INTERVAL_MS = (Number(process.env.BACKUP_INTERVAL_HOURS) || 24) * 60 * 60 * 1000;
 
-// This protects against accidental data corruption or a bad migration, since
-// it lives on the same Railway Volume as the live database - it is NOT
-// offsite protection against losing the Volume itself. Moving these to
-// external storage (e.g. Cloudflare R2, already used by the signage server)
-// would be the next step up if that risk needs covering too.
+// Local snapshots protect against a bad migration or accidental data
+// corruption; the R2 upload (when configured) additionally protects against
+// losing the Railway Volume itself, since it lands in a separate, fully
+// private bucket - never the signage server's public media bucket.
 async function runBackup() {
   fs.mkdirSync(backupsDir, { recursive: true });
   const filename = `online-order-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
@@ -29,6 +29,11 @@ async function runBackup() {
   const excess = files.length - KEEP_COUNT;
   for (let i = 0; i < excess; i++) {
     fs.rmSync(path.join(backupsDir, files[i]), { force: true });
+  }
+
+  if (r2Backup.isConfigured()) {
+    await r2Backup.uploadBackup(destination, filename);
+    await r2Backup.pruneRemoteBackups(KEEP_COUNT);
   }
 
   return destination;
