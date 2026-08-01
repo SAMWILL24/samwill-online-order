@@ -40,6 +40,9 @@ export function LoginPage() {
         Log In
       </button>
       <p className="muted">
+        <Link to={`/${storeSlug}/forgot-password`}>Forgot password?</Link>
+      </p>
+      <p className="muted">
         No account? <Link to={`/${storeSlug}/register`}>Register</Link>
       </p>
     </form>

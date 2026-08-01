@@ -9,6 +9,9 @@ const { requireAdminAuth } = require('../middleware/auth');
 const { getFullMenu } = require('../lib/menu');
 const { serializeOrder } = require('./orders');
 const cardpointe = require('../lib/cardpointe');
+const { createResetToken, consumeResetToken } = require('../lib/passwordReset');
+const { sendPasswordResetEmail } = require('../lib/authEmails');
+const { loginLimiter, forgotPasswordLimiter } = require('../middleware/rateLimit');
 const { getWeekHours, setWeekHours } = require('../lib/businessHours');
 
 const router = express.Router();
@@ -25,7 +28,7 @@ router.get('/login', (req, res) => {
   res.render('admin/login', { error: null, store: req.store });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { email, password } = req.body || {};
   const normalizedEmail = (email || '').toLowerCase();
 
@@ -54,6 +57,46 @@ router.post('/login', (req, res) => {
 router.post('/logout', (req, res) => {
   const slug = req.store.slug;
   req.session.destroy(() => res.redirect(`/${slug}/admin/login`));
+});
+
+router.get('/forgot-password', (req, res) => {
+  res.render('admin/forgot-password', { store: req.store, sent: false });
+});
+
+router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
+  const { email } = req.body || {};
+  const admin = email
+    ? db.prepare('SELECT * FROM admin_users WHERE store_id = ? AND email = ?').get(req.store.id, email.toLowerCase())
+    : null;
+  // Always show the same "check your email" page whether or not the account
+  // exists, so this can't be used to discover which emails have an account.
+  if (admin) {
+    const rawToken = createResetToken(req.store.id, 'admin', admin.id);
+    try {
+      await sendPasswordResetEmail(req.store, 'admin', admin.email, rawToken);
+    } catch (err) {
+      console.error('[email] admin password reset failed:', err.message);
+    }
+  }
+  res.render('admin/forgot-password', { store: req.store, sent: true });
+});
+
+router.get('/reset-password', (req, res) => {
+  res.render('admin/reset-password', { store: req.store, token: req.query.token || null, error: null });
+});
+
+router.post('/reset-password', loginLimiter, (req, res) => {
+  const { token, password } = req.body || {};
+  if (!password || password.length < 8) {
+    return res.render('admin/reset-password', { store: req.store, token, error: 'Password must be at least 8 characters' });
+  }
+  const adminId = consumeResetToken(req.store.id, 'admin', token);
+  if (!adminId) {
+    return res.render('admin/reset-password', { store: req.store, token: null, error: 'This reset link is invalid or has expired' });
+  }
+  const passwordHash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE admin_users SET password_hash = ? WHERE id = ? AND store_id = ?').run(passwordHash, adminId, req.store.id);
+  res.redirect(`/${req.store.slug}/admin/login`);
 });
 
 router.use(requireAdminAuth);

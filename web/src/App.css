@@ -18,6 +18,18 @@
   padding: 1.5rem 1rem 4rem;
 }
 
+.footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.footer a { color: inherit; text-decoration: underline; }
+
+.legal-page { max-width: 640px; margin: 0 auto; line-height: 1.6; }
+.legal-page h2 { font-size: 1.05rem; margin-top: 1.75rem; }
+
 .intro { text-align: center; }
 
 .promotions-banner { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }

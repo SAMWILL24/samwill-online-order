@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Outlet, Route, Routes, useParams } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
+import { Footer } from './components/Footer';
 import { IntroPage } from './pages/IntroPage';
 import { MenuPage } from './pages/MenuPage';
 import { CartPage } from './pages/CartPage';
@@ -10,6 +11,10 @@ import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { AccountPage } from './pages/AccountPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { TermsPage } from './pages/TermsPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 import { darken } from './lib/color';
 import './App.css';
 
@@ -35,6 +40,7 @@ function StoreShell() {
       <main className="app-main">
         <Outlet />
       </main>
+      <Footer />
     </>
   );
 }
@@ -68,7 +74,11 @@ function App() {
         <Route path="order/:id" element={<OrderTrackingPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
+        <Route path="forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route path="account" element={<AccountPage />} />
+        <Route path="terms" element={<TermsPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
       </Route>
       <Route path="/" element={<NoStoreSelected />} />
     </Routes>

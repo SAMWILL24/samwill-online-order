@@ -15,6 +15,8 @@
     .logo-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.25rem; }
     .logo-row img { height: 36px; width: auto; }
     .logo-row h1 { font-size: 1.1rem; margin: 0; }
+    .forgot-link { display: block; text-align: right; font-size: 0.8rem; margin: -0.5rem 0 1rem; color: #0d9488; text-decoration: none; }
+    .forgot-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -28,6 +30,7 @@
     <input type="email" id="email" name="email" required autofocus />
     <label for="password">Password</label>
     <input type="password" id="password" name="password" required />
+    <a class="forgot-link" href="<%= `/${store.slug}/admin/forgot-password` %>">Forgot password?</a>
     <button type="submit">Log In</button>
   </form>
 </body>

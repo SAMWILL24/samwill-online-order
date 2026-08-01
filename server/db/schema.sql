@@ -239,3 +239,18 @@ CREATE TABLE IF NOT EXISTS order_item_extras (
   price_cents INTEGER NOT NULL DEFAULT 0,
   half TEXT NOT NULL DEFAULT 'whole' CHECK (half IN ('left', 'right', 'whole'))
 );
+
+-- Shared by both customer and admin "forgot password" flows. Only a hash of
+-- the emailed token is stored, so a database leak alone can't be used to
+-- reset anyone's password.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  account_type TEXT NOT NULL CHECK (account_type IN ('customer', 'admin')),
+  account_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);

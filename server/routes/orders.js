@@ -5,6 +5,7 @@ const { resolveDiscount, PromotionError } = require('../lib/promotions');
 const { resolveRedemption, earnPoints, redeemPoints, LoyaltyError } = require('../lib/loyalty');
 const { optionalCustomerAuth, requireCustomerAuth } = require('../middleware/auth');
 const cardpointe = require('../lib/cardpointe');
+const { sendOrderConfirmation, sendNewOrderAlert } = require('../lib/orderEmails');
 
 const router = express.Router();
 
@@ -239,6 +240,18 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   const io = req.app.get('io');
   io.to(`admin:${storeId}`).emit('order:new', serializeOrder(order));
+
+  // Fire-and-forget: a slow or down email provider must never delay the
+  // order-confirmation response the customer is waiting on.
+  const recipientEmail = order.customer_id
+    ? db.prepare('SELECT email FROM customers WHERE id = ?').get(order.customer_id)?.email
+    : order.guest_email;
+  sendOrderConfirmation(req.store, serializeOrder(order), recipientEmail).catch((err) =>
+    console.error('[email] order confirmation failed:', err.message)
+  );
+  sendNewOrderAlert(req.store, serializeOrder(order)).catch((err) =>
+    console.error('[email] new order alert failed:', err.message)
+  );
 
   res.status(201).json({
     order: serializeOrder(order),

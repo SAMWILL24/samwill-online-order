@@ -2,10 +2,13 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { signCustomerToken, requireCustomerAuth } = require('../middleware/auth');
+const { createResetToken, consumeResetToken } = require('../lib/passwordReset');
+const { sendPasswordResetEmail } = require('../lib/authEmails');
+const { loginLimiter, forgotPasswordLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 
-router.post('/register', (req, res) => {
+router.post('/register', loginLimiter, (req, res) => {
   const { email, password, name, phone } = req.body || {};
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'email, password and name are required' });
@@ -29,7 +32,7 @@ router.post('/register', (req, res) => {
   });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
@@ -48,6 +51,37 @@ router.post('/login', (req, res) => {
       loyaltyPoints: customer.loyalty_points,
     },
   });
+});
+
+router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
+  const { email } = req.body || {};
+  const customer = email
+    ? db.prepare('SELECT * FROM customers WHERE store_id = ? AND email = ?').get(req.store.id, email.toLowerCase())
+    : null;
+  // Always respond the same way whether or not the account exists, so this
+  // endpoint can't be used to discover which emails have an account.
+  if (customer) {
+    const rawToken = createResetToken(req.store.id, 'customer', customer.id);
+    try {
+      await sendPasswordResetEmail(req.store, 'customer', customer.email, rawToken);
+    } catch (err) {
+      console.error('[email] password reset failed:', err.message);
+    }
+  }
+  res.json({ ok: true });
+});
+
+router.post('/reset-password', loginLimiter, (req, res) => {
+  const { token, password } = req.body || {};
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  const customerId = consumeResetToken(req.store.id, 'customer', token);
+  if (!customerId) return res.status(400).json({ error: 'This reset link is invalid or has expired' });
+
+  const passwordHash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE customers SET password_hash = ? WHERE id = ? AND store_id = ?').run(passwordHash, customerId, req.store.id);
+  res.json({ ok: true });
 });
 
 router.get('/me', requireCustomerAuth, (req, res) => {
