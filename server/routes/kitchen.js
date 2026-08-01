@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { serializeOrder } = require('./orders');
+const { resolveRecipientPhone, sendOrderReadySms, isOrderFinishedForCustomer } = require('../lib/orderSms');
 
 const router = express.Router();
 
@@ -38,6 +39,11 @@ router.patch('/api/orders/:id', requireKitchenToken, (req, res) => {
   const io = req.app.get('io');
   io.to(`order:${req.store.id}:${order.id}`).emit('order:update', serializeOrder(order));
   io.to(`admin:${req.store.id}`).emit('order:update', serializeOrder(order));
+  if (isOrderFinishedForCustomer(order)) {
+    sendOrderReadySms(req.store, serializeOrder(order), resolveRecipientPhone(order)).catch((err) =>
+      console.error('[sms] order ready failed:', err.message)
+    );
+  }
   res.json({ order: serializeOrder(order) });
 });
 

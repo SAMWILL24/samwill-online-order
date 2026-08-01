@@ -7,6 +7,7 @@ const { optionalCustomerAuth, requireCustomerAuth } = require('../middleware/aut
 const cardpointe = require('../lib/cardpointe');
 const { sendOrderConfirmation, sendNewOrderAlert } = require('../lib/orderEmails');
 const { enqueuePrintJob } = require('../lib/printQueue');
+const { resolveRecipientPhone, sendOrderReceivedSms } = require('../lib/orderSms');
 
 const router = express.Router();
 
@@ -252,6 +253,9 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
   );
   sendNewOrderAlert(req.store, serializeOrder(order)).catch((err) =>
     console.error('[email] new order alert failed:', err.message)
+  );
+  sendOrderReceivedSms(req.store, serializeOrder(order), resolveRecipientPhone(order)).catch((err) =>
+    console.error('[sms] order received failed:', err.message)
   );
   try {
     enqueuePrintJob(req.store, serializeOrder(order));
