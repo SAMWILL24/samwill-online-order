@@ -17,9 +17,13 @@ const { resolveStore } = require('./middleware/resolveStore');
 // Comma-separated list in dev (web app + Expo web preview run on different ports);
 // a single origin (or the deployed site's domain) in production.
 const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((o) => o.trim());
+const isWildcardOrigin = allowedOrigins.includes('*');
+// Browsers reject the combination of a wildcard origin with credentialed
+// requests outright, so these two must never be sent together - credentials
+// only turn on once specific origins are configured.
 const corsOptions = {
-  origin: allowedOrigins.includes('*') ? '*' : allowedOrigins,
-  credentials: true,
+  origin: isWildcardOrigin ? '*' : allowedOrigins,
+  credentials: !isWildcardOrigin,
 };
 
 const app = express();

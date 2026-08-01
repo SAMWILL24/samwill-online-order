@@ -56,20 +56,27 @@ router.post('/login', loginLimiter, (req, res) => {
   res.redirect(`/${req.store.slug}/admin`);
 });
 
-// Staff management is owner-only - a staff account must not be able to add
-// or remove other staff (or remove the owner and lock everyone else out).
-function requireOwner(req, res, next) {
-  if (req.session.isPlatformAdmin) return next();
-  // Sessions created before role-checking shipped won't have session.role
-  // cached yet - fall back to a fresh DB lookup rather than denying them.
+// Sessions created before role-checking shipped won't have session.role
+// cached yet - fall back to a fresh DB lookup rather than denying them.
+function isOwner(req) {
+  if (req.session.isPlatformAdmin) return true;
   let role = req.session.role;
   if (!role && req.session.adminId) {
     const admin = db.prepare('SELECT role FROM admin_users WHERE id = ? AND store_id = ?').get(req.session.adminId, req.store.id);
     role = admin?.role;
   }
-  if (role === 'owner') return next();
-  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Only the store owner can manage staff' });
-  return res.status(403).send('Only the store owner can manage staff');
+  return role === 'owner';
+}
+
+// Staff management and payment credentials are owner-only - a staff account
+// must not be able to add/remove other staff (or the owner), or view/change
+// this store's CardPointe merchant credentials.
+function requireOwner(message) {
+  return (req, res, next) => {
+    if (isOwner(req)) return next();
+    if (req.path.startsWith('/api/')) return res.status(403).json({ error: message });
+    return res.status(403).send(message);
+  };
 }
 
 router.post('/logout', (req, res) => {
@@ -155,7 +162,7 @@ router.get('/reporting/analytics', renderPage('admin/reporting/analytics', 'repo
 
 router.get('/customers', renderPage('admin/customers', 'customers', null));
 
-router.get('/staff', requireOwner, renderPage('admin/staff', 'staff', null));
+router.get('/staff', requireOwner('Only the store owner can manage staff'), renderPage('admin/staff', 'staff', null));
 
 router.get('/design', (req, res) => res.redirect(`/${req.store.slug}/admin/design/branding`));
 router.get('/design/branding', renderPage('admin/design/branding', 'design', 'branding'));
@@ -170,7 +177,11 @@ router.get('/settings/business-hours', renderPage('admin/settings/business-hours
 router.get('/settings/location-hours', (req, res) => res.redirect(`/${req.store.slug}/admin/settings/business-hours`));
 router.get('/settings/order-channels', renderPage('admin/settings/order-channels', 'settings', 'order-channels'));
 router.get('/settings/order-methods', (req, res) => res.redirect(`/${req.store.slug}/admin/settings/order-channels`));
-router.get('/settings/payments', renderPage('admin/settings/payments', 'settings', 'payments'));
+router.get(
+  '/settings/payments',
+  requireOwner('Only the store owner can view payment settings'),
+  renderPage('admin/settings/payments', 'settings', 'payments')
+);
 
 // ---- JSON API for dashboard/menu/settings pages ----
 
@@ -536,13 +547,23 @@ router.delete('/api/promotions/:id', (req, res) => {
 router.get('/api/settings', (req, res) => {
   const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.store.id);
   // The CardPointe API password is a write-only secret - it's never echoed back,
-  // only whether one has been set.
-  const { cardpointe_password, ...safe } = store;
-  res.json({ ...safe, cardpointe_password_set: Boolean(cardpointe_password) });
+  // only whether one has been set. The rest of the CardPointe fields are only
+  // sent to owners - staff shouldn't be able to see the merchant credentials
+  // even via this shared settings endpoint.
+  const { cardpointe_password, cardpointe_site, cardpointe_merchid, cardpointe_username, cardpointe_testmode, ...safe } = store;
+  const cardpointeFields = isOwner(req)
+    ? { cardpointe_site, cardpointe_merchid, cardpointe_username, cardpointe_testmode }
+    : {};
+  res.json({ ...safe, ...cardpointeFields, cardpointe_password_set: isOwner(req) ? Boolean(cardpointe_password) : undefined });
 });
+
+const CARDPOINTE_FIELDS = ['cardpointeSite', 'cardpointeMerchid', 'cardpointeUsername', 'cardpointePassword', 'cardpointeTestmode'];
 
 router.put('/api/settings', (req, res) => {
   const s = req.body || {};
+  if (!isOwner(req) && CARDPOINTE_FIELDS.some((f) => f in s)) {
+    return res.status(403).json({ error: 'Only the store owner can change payment settings' });
+  }
   const current = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.store.id);
   db.prepare(
     `UPDATE stores SET
@@ -706,7 +727,7 @@ router.get('/api/customers', (req, res) => {
 
 // ---- Staff ----
 
-router.get('/api/staff', requireOwner, (req, res) => {
+router.get('/api/staff', requireOwner('Only the store owner can manage staff'), (req, res) => {
   const staff = db
     .prepare('SELECT id, email, role, created_at FROM admin_users WHERE store_id = ? ORDER BY created_at ASC')
     .all(req.store.id);
@@ -715,7 +736,7 @@ router.get('/api/staff', requireOwner, (req, res) => {
   });
 });
 
-router.post('/api/staff', requireOwner, async (req, res) => {
+router.post('/api/staff', requireOwner('Only the store owner can manage staff'), async (req, res) => {
   const email = (req.body?.email || '').toLowerCase().trim();
   if (!email) return res.status(400).json({ error: 'email is required' });
 
@@ -740,7 +761,7 @@ router.post('/api/staff', requireOwner, async (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid, email, role: 'staff' });
 });
 
-router.delete('/api/staff/:id', requireOwner, (req, res) => {
+router.delete('/api/staff/:id', requireOwner('Only the store owner can manage staff'), (req, res) => {
   const targetId = Number(req.params.id);
   if (!req.session.isPlatformAdmin && req.session.adminId === targetId) {
     return res.status(400).json({ error: "You can't remove your own account" });
