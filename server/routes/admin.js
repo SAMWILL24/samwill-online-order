@@ -52,8 +52,25 @@ router.post('/login', loginLimiter, (req, res) => {
   req.session.isPlatformAdmin = false;
   req.session.storeId = req.store.id;
   req.session.adminEmail = admin.email;
+  req.session.role = admin.role;
   res.redirect(`/${req.store.slug}/admin`);
 });
+
+// Staff management is owner-only - a staff account must not be able to add
+// or remove other staff (or remove the owner and lock everyone else out).
+function requireOwner(req, res, next) {
+  if (req.session.isPlatformAdmin) return next();
+  // Sessions created before role-checking shipped won't have session.role
+  // cached yet - fall back to a fresh DB lookup rather than denying them.
+  let role = req.session.role;
+  if (!role && req.session.adminId) {
+    const admin = db.prepare('SELECT role FROM admin_users WHERE id = ? AND store_id = ?').get(req.session.adminId, req.store.id);
+    role = admin?.role;
+  }
+  if (role === 'owner') return next();
+  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Only the store owner can manage staff' });
+  return res.status(403).send('Only the store owner can manage staff');
+}
 
 router.post('/logout', (req, res) => {
   const slug = req.store.slug;
@@ -138,7 +155,7 @@ router.get('/reporting/analytics', renderPage('admin/reporting/analytics', 'repo
 
 router.get('/customers', renderPage('admin/customers', 'customers', null));
 
-router.get('/staff', renderPage('admin/staff', 'staff', null));
+router.get('/staff', requireOwner, renderPage('admin/staff', 'staff', null));
 
 router.get('/design', (req, res) => res.redirect(`/${req.store.slug}/admin/design/branding`));
 router.get('/design/branding', renderPage('admin/design/branding', 'design', 'branding'));
@@ -234,8 +251,20 @@ router.put('/api/items/:id', (req, res) => {
 
 router.delete('/api/items/:id', (req, res) => {
   if (!getOwnedItem(req.params.id, req.store.id)) return res.status(404).json({ error: 'Item not found' });
-  db.prepare('DELETE FROM menu_items WHERE id = ?').run(req.params.id);
-  res.json({ ok: true });
+  try {
+    db.prepare('DELETE FROM menu_items WHERE id = ?').run(req.params.id);
+    res.json({ ok: true, deactivated: false });
+  } catch (err) {
+    // An item that has ever been ordered can't be hard-deleted - order_items
+    // keeps a reference to it for order-history purposes. Deactivating it
+    // instead removes it from the customer-facing menu without breaking
+    // that history.
+    if (err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+      db.prepare('UPDATE menu_items SET is_active = 0 WHERE id = ?').run(req.params.id);
+      return res.json({ ok: true, deactivated: true });
+    }
+    throw err;
+  }
 });
 
 router.post('/api/items/:id/image', upload.single('image'), async (req, res) => {
@@ -677,7 +706,7 @@ router.get('/api/customers', (req, res) => {
 
 // ---- Staff ----
 
-router.get('/api/staff', (req, res) => {
+router.get('/api/staff', requireOwner, (req, res) => {
   const staff = db
     .prepare('SELECT id, email, role, created_at FROM admin_users WHERE store_id = ? ORDER BY created_at ASC')
     .all(req.store.id);
@@ -686,7 +715,7 @@ router.get('/api/staff', (req, res) => {
   });
 });
 
-router.post('/api/staff', async (req, res) => {
+router.post('/api/staff', requireOwner, async (req, res) => {
   const email = (req.body?.email || '').toLowerCase().trim();
   if (!email) return res.status(400).json({ error: 'email is required' });
 
@@ -711,7 +740,7 @@ router.post('/api/staff', async (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid, email, role: 'staff' });
 });
 
-router.delete('/api/staff/:id', (req, res) => {
+router.delete('/api/staff/:id', requireOwner, (req, res) => {
   const targetId = Number(req.params.id);
   if (!req.session.isPlatformAdmin && req.session.adminId === targetId) {
     return res.status(400).json({ error: "You can't remove your own account" });

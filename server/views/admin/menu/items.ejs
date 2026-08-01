@@ -142,7 +142,10 @@
 
     async function deleteItem(id) {
       if (!confirm('Delete this item?')) return;
-      await api('/items/' + id, { method: 'DELETE' });
+      const result = await api('/items/' + id, { method: 'DELETE' });
+      if (result.deactivated) {
+        alert("This item has past orders, so it can't be deleted outright - it's been marked inactive instead, which removes it from the customer-facing menu.");
+      }
       loadMenu();
     }
 

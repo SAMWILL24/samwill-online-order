@@ -184,6 +184,9 @@ export function CheckoutPage() {
         </div>
       )}
 
+      {!cardRequired && settings && (
+        <p className="muted">Payments are not configured for this store; your order will be placed without payment processing.</p>
+      )}
       {error && <p className="error">{error}</p>}
       {paymentNote && <p className="muted">{paymentNote}</p>}
 
