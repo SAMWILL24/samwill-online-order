@@ -22,4 +22,14 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Too many password reset requests. Please try again later.' },
 });
 
-module.exports = { loginLimiter, forgotPasswordLimiter };
+// Voice ordering calls a paid AI API per request - a stricter allowance than
+// login guards against an anonymous public endpoint being used to run up cost.
+const voiceOrderLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many voice order attempts. Please try again later.' },
+});
+
+module.exports = { loginLimiter, forgotPasswordLimiter, voiceOrderLimiter };

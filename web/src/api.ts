@@ -1,4 +1,4 @@
-import type { Announcement, Customer, MenuCategory, Order, Promotion, RestaurantSettings } from './types';
+import type { Announcement, Customer, MenuCategory, Order, Promotion, RestaurantSettings, VoiceOrderResult } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -31,6 +31,8 @@ export function createApi(storeSlug: string) {
     getSettings: () => request<RestaurantSettings>('/settings'),
     getActivePromotions: () => request<{ promotions: Promotion[] }>('/promotions/active'),
     getActiveAnnouncements: () => request<{ announcements: Announcement[] }>('/announcements/active'),
+    voiceOrder: (transcript: string) =>
+      request<VoiceOrderResult>('/voice-order', { method: 'POST', body: JSON.stringify({ transcript }) }),
 
     register: (email: string, password: string, name: string, phone?: string) =>
       request<{ token: string; customer: Customer }>('/auth/register', {

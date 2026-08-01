@@ -5,6 +5,8 @@ const { getSettings } = require('../lib/pricing');
 const { getTodayHoursLabel } = require('../lib/businessHours');
 const { toAbsoluteUrl } = require('../lib/url');
 const cardpointe = require('../lib/cardpointe');
+const voiceOrder = require('../lib/voiceOrder');
+const { voiceOrderLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 
@@ -39,6 +41,7 @@ router.get('/settings', (req, res) => {
     headerImageUrl: toAbsoluteUrl(s.header_image_url),
     footerImageUrl: toAbsoluteUrl(s.footer_image_url),
     digitalMenuUrl: s.digital_menu_url,
+    voiceOrderingEnabled: voiceOrder.isConfigured(),
     // The CardPointe "site" is just a subdomain identifier, not a secret - it's
     // needed client-side to build the hosted tokenizer iframe URL. The
     // merchant ID/username/password stay server-side only.
@@ -53,6 +56,19 @@ router.get('/announcements/active', (req, res) => {
     .prepare('SELECT * FROM announcements WHERE store_id = ? AND is_active = 1 ORDER BY created_at DESC')
     .all(req.store.id);
   res.json({ announcements: announcements.map((a) => ({ id: a.id, message: a.message })) });
+});
+
+router.post('/voice-order', voiceOrderLimiter, async (req, res) => {
+  const transcript = (req.body?.transcript || '').trim();
+  if (!transcript) return res.status(400).json({ error: 'transcript is required' });
+  if (!voiceOrder.isConfigured()) return res.status(503).json({ error: 'Voice ordering is not available' });
+  try {
+    const result = await voiceOrder.parseVoiceOrder(req.store.id, transcript);
+    res.json(result);
+  } catch (err) {
+    console.error('[voice-order] failed:', err.message);
+    res.status(502).json({ error: 'Could not process that order right now, please try again' });
+  }
 });
 
 module.exports = router;

@@ -62,6 +62,23 @@ export interface RestaurantSettings {
   cardpointeConfigured: boolean;
   cardpointeSite: string | null;
   cardpointeTestMode: boolean;
+  voiceOrderingEnabled: boolean;
+}
+
+export interface VoiceOrderLine {
+  menuItemId: number;
+  menuItemName: string;
+  sizeId: number;
+  sizeLabel: string;
+  unitPriceCents: number;
+  extras: CartLineExtra[];
+  quantity: number;
+  notes: string;
+}
+
+export interface VoiceOrderResult {
+  items: VoiceOrderLine[];
+  unmatched: string[];
 }
 
 export interface Announcement {
