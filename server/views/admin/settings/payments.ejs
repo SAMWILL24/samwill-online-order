@@ -9,6 +9,11 @@
     .status-pill.ok { background: rgba(43,107,63,0.25); color: #4ade80; }
     .status-pill.missing { background: rgba(122,42,42,0.25); color: #f87171; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
+    .field input { width: 100%; max-width: 360px; }
+    .row { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .toggle-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; margin: 1rem 0; }
   </style>
 
   <h1>Settings</h1>
@@ -20,30 +25,100 @@
   </div>
 
   <div class="card">
-    <h3 style="margin-top:0;">Stripe</h3>
+    <h3 style="margin-top:0;">CardPointe</h3>
     <div id="status" class="status-pill">Checking&hellip;</div>
     <p class="muted" style="margin-top:0.75rem;">
-      Stripe API keys are configured via the server's <code>.env</code> file
-      (<code>STRIPE_SECRET_KEY</code>, <code>STRIPE_WEBHOOK_SECRET</code>) rather than through this
-      dashboard, so secret keys are never stored in the database or sent to a browser.
+      This restaurant's own CardPointe merchant account. Card payments taken on this store's
+      checkout settle directly to this account - not to any other SAMWILL Online store.
+      Contact CardPointe/your payment processor to get these credentials.
     </p>
+
+    <form id="cp-form" onsubmit="return save(event)">
+      <div class="toggle-row">
+        <input type="checkbox" id="cardpointeTestmode" />
+        <label for="cardpointeTestmode" style="margin:0;">Test mode (use the UAT sandbox, not live payments)</label>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Site</label>
+          <input name="cardpointeSite" placeholder="e.g. fts" />
+        </div>
+        <div class="field">
+          <label>Merchant ID</label>
+          <input name="cardpointeMerchid" placeholder="e.g. 496160873888" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>API Username</label>
+          <input name="cardpointeUsername" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>API Password</label>
+          <input name="cardpointePassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep the current password" />
+        </div>
+      </div>
+
+      <button class="btn" type="submit">Save</button>
+      <span id="saved" style="color:#8bc98b; margin-left:0.75rem; display:none;">Saved.</span>
+    </form>
   </div>
 
   <script>
     const STORE_SLUG = '<%= store.slug %>';
-    async function load() {
+
+    async function loadStatus() {
       const res = await fetch(`/${STORE_SLUG}/admin/api/payments-status`);
       const data = await res.json();
       const el = document.getElementById('status');
-      if (data.stripeConfigured) {
+      if (data.cardpointeConfigured) {
         el.className = 'status-pill ok';
-        el.innerHTML = '<span class="dot"></span> Stripe is configured';
+        el.innerHTML = '<span class="dot"></span> CardPointe is configured';
       } else {
         el.className = 'status-pill missing';
-        el.innerHTML = '<span class="dot"></span> Stripe is not configured - orders will be placed without real payment processing';
+        el.innerHTML = '<span class="dot"></span> CardPointe is not configured - orders will be placed without real payment processing';
       }
     }
-    load();
+
+    async function loadForm() {
+      const res = await fetch(`/${STORE_SLUG}/admin/api/settings`);
+      const s = await res.json();
+      const f = document.getElementById('cp-form');
+      f.cardpointeSite.value = s.cardpointe_site || '';
+      f.cardpointeMerchid.value = s.cardpointe_merchid || '';
+      f.cardpointeUsername.value = s.cardpointe_username || '';
+      f.cardpointePassword.placeholder = s.cardpointe_password_set
+        ? 'Password is set - leave blank to keep it'
+        : 'Not set';
+      document.getElementById('cardpointeTestmode').checked = Boolean(s.cardpointe_testmode);
+    }
+
+    async function save(e) {
+      e.preventDefault();
+      const f = e.target;
+      await fetch(`/${STORE_SLUG}/admin/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardpointeSite: f.cardpointeSite.value,
+          cardpointeMerchid: f.cardpointeMerchid.value,
+          cardpointeUsername: f.cardpointeUsername.value,
+          cardpointePassword: f.cardpointePassword.value,
+          cardpointeTestmode: document.getElementById('cardpointeTestmode').checked,
+        }),
+      });
+      f.cardpointePassword.value = '';
+      const saved = document.getElementById('saved');
+      saved.style.display = 'inline';
+      setTimeout(() => (saved.style.display = 'none'), 1500);
+      await loadStatus();
+      await loadForm();
+      return false;
+    }
+
+    loadStatus();
+    loadForm();
   </script>
 
   <%- include('../_sidebar_close') %>

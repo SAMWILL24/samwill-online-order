@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCents } from '../lib/money';
-import { StripePaymentForm } from '../components/StripePaymentForm';
+import { CardPointeTokenizer } from '../components/CardPointeTokenizer';
 import type { RestaurantSettings } from '../types';
 
 const TIP_PRESETS = [0, 10, 15, 20];
@@ -22,8 +22,7 @@ export function CheckoutPage() {
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<number | null>(null);
+  const [cardToken, setCardToken] = useState<string | null>(null);
   const [paymentNote, setPaymentNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,6 +33,8 @@ export function CheckoutPage() {
   const tipCents = Math.round((subtotalCents * tipPercent) / 100);
   const canRedeem = Boolean(customer && settings && customer.loyaltyPoints >= settings.loyaltyMinRedeemPoints);
   const redeemValueCents = settings ? Math.round(redeemPoints * settings.loyaltyRedeemValueCents) : 0;
+
+  const cardRequired = Boolean(settings?.cardpointeConfigured);
 
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
@@ -64,16 +65,12 @@ export function CheckoutPage() {
         })),
         ...(customer ? {} : { guest: { name: guestName, email: guestEmail, phone: guestPhone } }),
         ...(orderType === 'delivery' ? { address } : {}),
+        ...(cardToken ? { cardToken } : {}),
       };
       const res = await api.createOrder(payload);
-      setOrderId(res.order.id);
-      if (res.payment.clientSecret) {
-        setClientSecret(res.payment.clientSecret);
-      } else {
-        setPaymentNote(res.payment.note || null);
-        clearCart();
-        navigate(`/${storeSlug}/order/${res.order.id}`);
-      }
+      setPaymentNote(res.payment.note || null);
+      clearCart();
+      navigate(`/${storeSlug}/order/${res.order.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to place order');
     } finally {
@@ -81,22 +78,8 @@ export function CheckoutPage() {
     }
   }
 
-  function handlePaid() {
-    clearCart();
-    if (orderId) navigate(`/${storeSlug}/order/${orderId}`);
-  }
-
   if (cart.length === 0) {
     return <p className="empty-state">Your cart is empty.</p>;
-  }
-
-  if (clientSecret) {
-    return (
-      <div className="checkout-page">
-        <h1>Payment</h1>
-        <StripePaymentForm clientSecret={clientSecret} onPaid={handlePaid} />
-      </div>
-    );
   }
 
   return (
@@ -194,11 +177,18 @@ export function CheckoutPage() {
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything we should know?" />
       </div>
 
+      {cardRequired && settings?.cardpointeSite && (
+        <div className="option-group">
+          <h4>Card details</h4>
+          <CardPointeTokenizer site={settings.cardpointeSite} testMode={settings.cardpointeTestMode} onToken={setCardToken} />
+        </div>
+      )}
+
       {error && <p className="error">{error}</p>}
       {paymentNote && <p className="muted">{paymentNote}</p>}
 
-      <button className="btn btn-primary btn-lg" type="submit" disabled={submitting}>
-        {submitting ? 'Placing order…' : 'Place Order'}
+      <button className="btn btn-primary btn-lg" type="submit" disabled={submitting || (cardRequired && !cardToken)}>
+        {submitting ? 'Placing order…' : 'Pay & Place Order'}
       </button>
     </form>
   );

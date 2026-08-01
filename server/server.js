@@ -39,12 +39,6 @@ app.use(sessionMiddleware);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Stripe webhook needs the raw body for signature verification, so it's mounted
-// before the JSON body parser (which would otherwise consume/reformat the body).
-// Stripe metadata carries the storeId, so this route resolves it itself rather
-// than needing a :storeSlug prefix.
-app.use('/api/webhooks', express.raw({ type: 'application/json' }), require('./routes/webhooks'));
-
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

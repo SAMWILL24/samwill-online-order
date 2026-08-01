@@ -4,7 +4,7 @@ const { priceCart, OrderValidationError } = require('../lib/pricing');
 const { resolveDiscount, PromotionError } = require('../lib/promotions');
 const { resolveRedemption, earnPoints, redeemPoints, LoyaltyError } = require('../lib/loyalty');
 const { optionalCustomerAuth, requireCustomerAuth } = require('../middleware/auth');
-const { stripe, isConfigured: stripeConfigured } = require('../lib/stripe');
+const cardpointe = require('../lib/cardpointe');
 
 const router = express.Router();
 
@@ -54,6 +54,7 @@ function serializeOrder(order) {
     promotion: promotion && { title: promotion.title, code: promotion.code },
     totalCents: order.total_cents,
     paymentStatus: order.payment_status,
+    refundedCents: order.refunded_cents,
     notes: order.notes,
     createdAt: order.created_at,
     guest: order.customer_id ? null : { name: order.guest_name, email: order.guest_email, phone: order.guest_phone },
@@ -117,6 +118,33 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
   const taxCents = Math.round(discountedSubtotalCents * (priced.settings.tax_rate_bps / 10000));
   const totalCents = discountedSubtotalCents + priced.deliveryFeeCents + taxCents + safeTip;
 
+  // CardPointe's auth+capture is a single synchronous call, so the charge is
+  // attempted before anything is written - a declined card never creates an
+  // order row at all (unlike the old Stripe flow, which created a pending
+  // order first and confirmed it later via webhook).
+  let paymentStatus = 'pending';
+  let retref = null;
+  if (cardpointe.isConfigured(req.store)) {
+    const { cardToken } = req.body || {};
+    if (!cardToken) return res.status(400).json({ error: 'cardToken is required to place an order' });
+    let charge;
+    try {
+      charge = await cardpointe.authAndCapture(req.store, {
+        token: cardToken,
+        amountCents: totalCents,
+        orderId: `pending-${storeId}-${Date.now()}`,
+      });
+    } catch (err) {
+      console.error('[cardpointe] auth request failed:', err.message);
+      return res.status(502).json({ error: 'Payment provider error, please try again' });
+    }
+    if (!charge.approved) {
+      return res.status(402).json({ error: charge.resptext || 'Card was declined' });
+    }
+    paymentStatus = 'paid';
+    retref = charge.retref;
+  }
+
   const createOrder = db.transaction(() => {
     let addressId = null;
     if (type === 'delivery') {
@@ -129,9 +157,9 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
     const orderInfo = db
       .prepare(
         `INSERT INTO orders
-          (store_id, customer_id, guest_name, guest_email, guest_phone, type, requested_time, subtotal_cents, delivery_fee_cents, tax_cents, tip_cents, total_cents, address_id, notes,
-           promotion_id, promo_code_entered, promotion_discount_cents, loyalty_redeem_cents, loyalty_points_redeemed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (store_id, customer_id, guest_name, guest_email, guest_phone, type, requested_time, status, subtotal_cents, delivery_fee_cents, tax_cents, tip_cents, total_cents, address_id, notes,
+           promotion_id, promo_code_entered, promotion_discount_cents, loyalty_redeem_cents, loyalty_points_redeemed, cardpointe_retref, payment_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         storeId,
@@ -141,6 +169,7 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
         req.customerId ? null : guest.phone,
         type,
         requestedTime,
+        paymentStatus === 'paid' ? 'confirmed' : 'placed',
         priced.subtotalCents,
         priced.deliveryFeeCents,
         taxCents,
@@ -152,7 +181,9 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
         promoCode || null,
         discount.discountCents,
         redemption.cents,
-        redemption.pointsRedeemed
+        redemption.pointsRedeemed,
+        retref,
+        paymentStatus
       );
 
     const orderId = orderInfo.lastInsertRowid;
@@ -205,54 +236,16 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
     return res.status(500).json({ error: 'Could not place order, please try again' });
   }
 
-  let clientSecret = null;
-  if (stripeConfigured) {
-    try {
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: totalCents,
-        currency: 'usd',
-        metadata: { orderId: String(orderId), storeId: String(storeId) },
-        automatic_payment_methods: { enabled: true },
-      });
-      db.prepare('UPDATE orders SET payment_intent_id = ? WHERE id = ?').run(paymentIntent.id, orderId);
-      clientSecret = paymentIntent.client_secret;
-    } catch (err) {
-      console.error('[stripe] Failed to create PaymentIntent:', err.message);
-      return res.status(502).json({ error: 'Payment provider error, please try again' });
-    }
-  }
-
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   const io = req.app.get('io');
   io.to(`admin:${storeId}`).emit('order:new', serializeOrder(order));
 
   res.status(201).json({
     order: serializeOrder(order),
-    payment: stripeConfigured
-      ? { clientSecret, publishableKeyRequired: true }
-      : { clientSecret: null, note: 'Stripe not configured on this server; order created without payment processing.' },
+    payment: cardpointe.isConfigured(req.store)
+      ? { charged: true }
+      : { charged: false, note: 'Payments are not configured for this store; order created without payment processing.' },
   });
-});
-
-router.post('/:id/confirm-payment', async (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-  if (!stripeConfigured) return res.status(400).json({ error: 'Stripe is not configured on this server' });
-  if (!order.payment_intent_id) return res.status(400).json({ error: 'Order has no associated payment' });
-
-  const intent = await stripe.paymentIntents.retrieve(order.payment_intent_id);
-  if (intent.status === 'succeeded') {
-    db.prepare("UPDATE orders SET payment_status = 'paid', status = 'confirmed' WHERE id = ?").run(order.id);
-  } else {
-    db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run(intent.status, order.id);
-  }
-
-  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
-  const io = req.app.get('io');
-  io.to(`order:${req.store.id}:${order.id}`).emit('order:update', serializeOrder(updated));
-  io.to(`admin:${req.store.id}`).emit('order:update', serializeOrder(updated));
-
-  res.json({ order: serializeOrder(updated) });
 });
 
 router.get('/mine', requireCustomerAuth, (req, res) => {

@@ -68,11 +68,14 @@
           <div style="text-align:right;">
             <div class="status">${o.status.replaceAll('_', ' ')}</div>
             <div style="margin: 0.5rem 0; font-weight:600;">${money(o.totalCents)}</div>
-            <div style="font-size:0.75rem;color:#999;">payment: ${o.paymentStatus}</div>
+            <div style="font-size:0.75rem;color:#999;">payment: ${o.paymentStatus}${o.refundedCents > 0 ? ' (' + money(o.refundedCents) + ' refunded)' : ''}</div>
             <div class="order-actions" style="margin-top:0.75rem;">
               <select onchange="updateStatus(${o.id}, this.value)">
                 ${STATUS_FLOW.concat('cancelled').map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s.replaceAll('_',' ')}</option>`).join('')}
               </select>
+              ${(o.paymentStatus === 'paid' || o.paymentStatus === 'partially_refunded') && o.refundedCents < o.totalCents
+                ? `<button type="button" class="btn secondary" style="margin-top:0.5rem;" onclick="refundOrder(${o.id}, ${o.totalCents - o.refundedCents})">Refund</button>`
+                : ''}
             </div>
           </div>
         </div>
@@ -85,6 +88,27 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
+    }
+
+    async function refundOrder(id, remainingCents) {
+      const input = prompt(`Refund how much? (max ${money(remainingCents)})`, (remainingCents / 100).toFixed(2));
+      if (input === null) return;
+      const amountCents = Math.round(parseFloat(input) * 100);
+      if (!amountCents || amountCents <= 0 || amountCents > remainingCents) {
+        alert('Enter a valid amount up to the remaining balance.');
+        return;
+      }
+      const res = await fetch(`/${STORE_SLUG}/admin/api/orders/${id}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountCents }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Refund failed');
+        return;
+      }
+      loadOrders();
     }
 
     socket.on('order:new', (order) => {

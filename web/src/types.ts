@@ -59,6 +59,9 @@ export interface RestaurantSettings {
   headerImageUrl: string | null;
   footerImageUrl: string | null;
   digitalMenuUrl: string | null;
+  cardpointeConfigured: boolean;
+  cardpointeSite: string | null;
+  cardpointeTestMode: boolean;
 }
 
 export interface Announcement {
@@ -142,6 +145,7 @@ export interface Order {
   promotion: { title: string; code: string | null } | null;
   totalCents: number;
   paymentStatus: string;
+  refundedCents: number;
   notes: string | null;
   createdAt: string;
   guest: { name: string; email: string; phone: string } | null;

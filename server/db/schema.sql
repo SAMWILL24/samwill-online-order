@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS stores (
   header_image_url TEXT,
   footer_image_url TEXT,
   digital_menu_url TEXT,
+  -- Each store boards its own CardPointe merchant account, so payments for
+  -- different restaurants are never comingled - CardPointe settles directly
+  -- to that restaurant's own bank account, not SAMWILL's.
+  cardpointe_site TEXT,
+  cardpointe_merchid TEXT,
+  cardpointe_username TEXT,
+  cardpointe_password TEXT,
+  cardpointe_testmode INTEGER NOT NULL DEFAULT 1,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -186,8 +194,9 @@ CREATE TABLE IF NOT EXISTS orders (
   tip_cents INTEGER NOT NULL DEFAULT 0,
   total_cents INTEGER NOT NULL,
   address_id INTEGER REFERENCES addresses(id),
-  payment_intent_id TEXT,
+  cardpointe_retref TEXT,
   payment_status TEXT NOT NULL DEFAULT 'pending',
+  refunded_cents INTEGER NOT NULL DEFAULT 0,
   notes TEXT,
   promotion_id INTEGER REFERENCES promotions(id),
   promo_code_entered TEXT,

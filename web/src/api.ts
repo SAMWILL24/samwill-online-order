@@ -45,7 +45,7 @@ export function createApi(storeSlug: string) {
     me: () => request<{ customer: Customer }>('/auth/me'),
 
     createOrder: (payload: unknown) =>
-      request<{ order: Order; payment: { clientSecret: string | null; note?: string } }>('/orders', {
+      request<{ order: Order; payment: { charged: boolean; note?: string } }>('/orders', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),

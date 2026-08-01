@@ -8,7 +8,7 @@ const db = require('../db');
 const { requireAdminAuth } = require('../middleware/auth');
 const { getFullMenu } = require('../lib/menu');
 const { serializeOrder } = require('./orders');
-const { isConfigured: stripeConfigured } = require('../lib/stripe');
+const cardpointe = require('../lib/cardpointe');
 const { getWeekHours, setWeekHours } = require('../lib/businessHours');
 
 const router = express.Router();
@@ -459,7 +459,11 @@ router.delete('/api/promotions/:id', (req, res) => {
 // ---- Settings (the store's own row in `stores`) ----
 
 router.get('/api/settings', (req, res) => {
-  res.json(db.prepare('SELECT * FROM stores WHERE id = ?').get(req.store.id));
+  const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.store.id);
+  // The CardPointe API password is a write-only secret - it's never echoed back,
+  // only whether one has been set.
+  const { cardpointe_password, ...safe } = store;
+  res.json({ ...safe, cardpointe_password_set: Boolean(cardpointe_password) });
 });
 
 router.put('/api/settings', (req, res) => {
@@ -472,7 +476,8 @@ router.put('/api/settings', (req, res) => {
       loyalty_earn_rate_per_dollar = ?, loyalty_redeem_value_cents = ?, loyalty_min_redeem_points = ?,
       pickup_enabled = ?, delivery_enabled = ?, curbside_enabled = ?, theme_accent_color = ?,
       online_ordering_enabled = ?, store_description = ?, prep_time_minutes = ?, order_mode = ?,
-      digital_menu_url = ?
+      digital_menu_url = ?, cardpointe_site = ?, cardpointe_merchid = ?, cardpointe_username = ?,
+      cardpointe_password = ?, cardpointe_testmode = ?
      WHERE id = ?`
   ).run(
     s.name ?? current.name,
@@ -494,6 +499,11 @@ router.put('/api/settings', (req, res) => {
     Number.isInteger(s.prepTimeMinutes) ? s.prepTimeMinutes : current.prep_time_minutes,
     s.orderMode ?? current.order_mode,
     s.digitalMenuUrl ?? current.digital_menu_url,
+    typeof s.cardpointeSite === 'string' ? s.cardpointeSite.trim() : current.cardpointe_site,
+    typeof s.cardpointeMerchid === 'string' ? s.cardpointeMerchid.trim() : current.cardpointe_merchid,
+    typeof s.cardpointeUsername === 'string' ? s.cardpointeUsername.trim() : current.cardpointe_username,
+    typeof s.cardpointePassword === 'string' && s.cardpointePassword.length > 0 ? s.cardpointePassword : current.cardpointe_password,
+    typeof s.cardpointeTestmode === 'boolean' ? (s.cardpointeTestmode ? 1 : 0) : current.cardpointe_testmode,
     req.store.id
   );
   res.json({ ok: true });
@@ -762,7 +772,63 @@ router.delete('/api/photos/:filename', (req, res) => {
 // ---- Payments status ----
 
 router.get('/api/payments-status', (req, res) => {
-  res.json({ stripeConfigured });
+  res.json({ cardpointeConfigured: cardpointe.isConfigured(req.store) });
+});
+
+function isYes(v) {
+  return v === true || v === 'Y' || v === 'y';
+}
+
+router.post('/api/orders/:id/refund', async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND store_id = ?').get(req.params.id, req.store.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (!order.cardpointe_retref) return res.status(400).json({ error: 'This order has no associated card payment' });
+
+  const remainingCents = order.total_cents - order.refunded_cents;
+  const requested = Number.isInteger(req.body?.amountCents) ? req.body.amountCents : remainingCents;
+  if (requested <= 0 || requested > remainingCents) {
+    return res.status(400).json({ error: `amountCents must be between 1 and ${remainingCents}` });
+  }
+
+  let status;
+  try {
+    status = await cardpointe.inquire(req.store, { retref: order.cardpointe_retref });
+  } catch (err) {
+    console.error('[cardpointe] inquire failed:', err.message);
+    return res.status(502).json({ error: 'Could not reach payment provider' });
+  }
+
+  try {
+    let result;
+    if (isYes(status.voidable)) {
+      result = await cardpointe.voidTransaction(req.store, { retref: order.cardpointe_retref, amountCents: requested });
+    } else if (isYes(status.refundable)) {
+      result = await cardpointe.refund(req.store, { retref: order.cardpointe_retref, amountCents: requested, orderId: order.id });
+    } else {
+      return res.status(400).json({ error: 'This transaction is not eligible for a refund or void right now' });
+    }
+    if (!result.approved) {
+      return res.status(502).json({ error: result.resptext || 'Refund was declined by the payment provider' });
+    }
+  } catch (err) {
+    console.error('[cardpointe] refund/void failed:', err.message);
+    return res.status(502).json({ error: err.message || 'Refund failed' });
+  }
+
+  const newRefundedCents = order.refunded_cents + requested;
+  const newPaymentStatus = newRefundedCents >= order.total_cents ? 'refunded' : 'partially_refunded';
+  db.prepare('UPDATE orders SET refunded_cents = ?, payment_status = ? WHERE id = ?').run(
+    newRefundedCents,
+    newPaymentStatus,
+    order.id
+  );
+
+  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+  const io = req.app.get('io');
+  io.to(`order:${req.store.id}:${order.id}`).emit('order:update', serializeOrder(updated));
+  io.to(`admin:${req.store.id}`).emit('order:update', serializeOrder(updated));
+
+  res.json({ order: serializeOrder(updated) });
 });
 
 module.exports = router;

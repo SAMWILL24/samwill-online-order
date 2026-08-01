@@ -4,6 +4,7 @@ const { getFullMenu } = require('../lib/menu');
 const { getSettings } = require('../lib/pricing');
 const { getTodayHoursLabel } = require('../lib/businessHours');
 const { toAbsoluteUrl } = require('../lib/url');
+const cardpointe = require('../lib/cardpointe');
 
 const router = express.Router();
 
@@ -38,6 +39,12 @@ router.get('/settings', (req, res) => {
     headerImageUrl: toAbsoluteUrl(s.header_image_url),
     footerImageUrl: toAbsoluteUrl(s.footer_image_url),
     digitalMenuUrl: s.digital_menu_url,
+    // The CardPointe "site" is just a subdomain identifier, not a secret - it's
+    // needed client-side to build the hosted tokenizer iframe URL. The
+    // merchant ID/username/password stay server-side only.
+    cardpointeConfigured: cardpointe.isConfigured(req.store),
+    cardpointeSite: s.cardpointe_site || null,
+    cardpointeTestMode: Boolean(s.cardpointe_testmode),
   });
 });
 
