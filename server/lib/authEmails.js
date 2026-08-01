@@ -19,4 +19,16 @@ async function sendPasswordResetEmail(store, accountType, email, rawToken) {
   });
 }
 
-module.exports = { sendPasswordResetEmail };
+async function sendStaffInviteEmail(store, email, rawToken) {
+  const url = resetUrl(store, 'admin', rawToken);
+  await sendEmail({
+    to: email,
+    subject: `${store.name}: You've been added as a staff member`,
+    text: `You've been given staff access to ${store.name}'s admin dashboard.\n\nSet up your password here (link expires in 1 hour): ${url}`,
+    html:
+      `<p>You've been given staff access to <strong>${store.name}</strong>'s admin dashboard.</p>` +
+      `<p><a href="${url}">Set up your password</a> (link expires in 1 hour)</p>`,
+  });
+}
+
+module.exports = { sendPasswordResetEmail, sendStaffInviteEmail };

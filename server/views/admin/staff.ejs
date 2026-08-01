@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Staff - SAMWILL Kitchen Admin</title>
+  <%- include('_sidebar', { section, page, adminEmail, store }) %>
+
+  <h1>Staff</h1>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Add staff member</h3>
+    <p class="muted">They'll get an email with a link to set up their own password - no need to share one.</p>
+    <form id="invite-form" onsubmit="return invite(event)" style="display:flex; gap:0.5rem; align-items:flex-start;">
+      <input type="email" id="invite-email" placeholder="Email address" required style="flex:1; max-width:320px;" />
+      <button class="btn" type="submit">Send Invite</button>
+    </form>
+    <p id="invite-error" style="display:none; color:#dc2626; font-size:0.85rem;"></p>
+  </div>
+
+  <div class="card">
+    <table class="admin-table">
+      <thead>
+        <tr><th>Email</th><th>Role</th><th>Added</th><th></th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const STORE_SLUG = '<%= store.slug %>';
+
+    async function load() {
+      const res = await fetch(`/${STORE_SLUG}/admin/api/staff`);
+      const data = await res.json();
+      document.getElementById('rows').innerHTML = data.staff.map(s => `
+        <tr>
+          <td>${s.email}</td>
+          <td>${s.role}</td>
+          <td>${new Date(s.createdAt).toLocaleDateString()}</td>
+          <td><button class="btn secondary" onclick="remove(${s.id})">Remove</button></td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="muted">No staff accounts yet.</td></tr>';
+    }
+
+    async function invite(e) {
+      e.preventDefault();
+      const email = document.getElementById('invite-email').value;
+      const errorEl = document.getElementById('invite-error');
+      errorEl.style.display = 'none';
+      const res = await fetch(`/${STORE_SLUG}/admin/api/staff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || 'Could not send invite';
+        errorEl.style.display = 'block';
+        return false;
+      }
+      document.getElementById('invite-email').value = '';
+      load();
+      return false;
+    }
+
+    async function remove(id) {
+      if (!confirm('Remove this staff account? They will no longer be able to log in.')) return;
+      const res = await fetch(`/${STORE_SLUG}/admin/api/staff/${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Could not remove staff account');
+        return;
+      }
+      load();
+    }
+
+    load();
+  </script>
+
+  <%- include('_sidebar_close') %>
+</body>
+</html>

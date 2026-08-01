@@ -9,8 +9,9 @@ const { requireAdminAuth } = require('../middleware/auth');
 const { getFullMenu } = require('../lib/menu');
 const { serializeOrder } = require('./orders');
 const cardpointe = require('../lib/cardpointe');
+const crypto = require('crypto');
 const { createResetToken, consumeResetToken } = require('../lib/passwordReset');
-const { sendPasswordResetEmail } = require('../lib/authEmails');
+const { sendPasswordResetEmail, sendStaffInviteEmail } = require('../lib/authEmails');
 const { loginLimiter, forgotPasswordLimiter } = require('../middleware/rateLimit');
 const { getWeekHours, setWeekHours } = require('../lib/businessHours');
 
@@ -136,6 +137,8 @@ router.get('/reporting/all-reports', (req, res) => res.redirect(`/${req.store.sl
 router.get('/reporting/analytics', renderPage('admin/reporting/analytics', 'reporting', 'analytics'));
 
 router.get('/customers', renderPage('admin/customers', 'customers', null));
+
+router.get('/staff', renderPage('admin/staff', 'staff', null));
 
 router.get('/design', (req, res) => res.redirect(`/${req.store.slug}/admin/design/branding`));
 router.get('/design/branding', renderPage('admin/design/branding', 'design', 'branding'));
@@ -670,6 +673,56 @@ router.get('/api/customers', (req, res) => {
       lifetimeSpendCents: c.lifetime_spend_cents,
     })),
   });
+});
+
+// ---- Staff ----
+
+router.get('/api/staff', (req, res) => {
+  const staff = db
+    .prepare('SELECT id, email, role, created_at FROM admin_users WHERE store_id = ? ORDER BY created_at ASC')
+    .all(req.store.id);
+  res.json({
+    staff: staff.map((s) => ({ id: s.id, email: s.email, role: s.role, createdAt: s.created_at })),
+  });
+});
+
+router.post('/api/staff', async (req, res) => {
+  const email = (req.body?.email || '').toLowerCase().trim();
+  if (!email) return res.status(400).json({ error: 'email is required' });
+
+  const existing = db.prepare('SELECT id FROM admin_users WHERE store_id = ? AND email = ?').get(req.store.id, email);
+  if (existing) return res.status(409).json({ error: 'A staff account with this email already exists' });
+
+  // The new account gets an unusable random password - the invited staff
+  // member sets their own via the same emailed link used for password
+  // resets, so no temporary password ever needs to be typed or shared.
+  const unusablePassword = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
+  const info = db
+    .prepare('INSERT INTO admin_users (store_id, email, password_hash, role) VALUES (?, ?, ?, ?)')
+    .run(req.store.id, email, unusablePassword, 'staff');
+
+  const rawToken = createResetToken(req.store.id, 'admin', info.lastInsertRowid);
+  try {
+    await sendStaffInviteEmail(req.store, email, rawToken);
+  } catch (err) {
+    console.error('[email] staff invite failed:', err.message);
+  }
+
+  res.status(201).json({ id: info.lastInsertRowid, email, role: 'staff' });
+});
+
+router.delete('/api/staff/:id', (req, res) => {
+  const targetId = Number(req.params.id);
+  if (!req.session.isPlatformAdmin && req.session.adminId === targetId) {
+    return res.status(400).json({ error: "You can't remove your own account" });
+  }
+  const remaining = db.prepare('SELECT COUNT(*) AS n FROM admin_users WHERE store_id = ?').get(req.store.id).n;
+  if (remaining <= 1) {
+    return res.status(400).json({ error: 'A store must keep at least one staff account' });
+  }
+  const info = db.prepare('DELETE FROM admin_users WHERE id = ? AND store_id = ?').run(targetId, req.store.id);
+  if (info.changes === 0) return res.status(404).json({ error: 'Staff account not found' });
+  res.json({ ok: true });
 });
 
 // ---- Reporting ----

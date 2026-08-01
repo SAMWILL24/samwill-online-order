@@ -83,6 +83,17 @@ app.use('/:storeSlug/admin', resolveStore, require('./routes/admin'));
 
 app.get('/', (req, res) => res.json({ ok: true, service: 'samwill-online-order-server' }));
 
+// For uptime monitors / Railway healthchecks - confirms the process is up
+// AND the database file is actually reachable, not just that Express is alive.
+app.get('/healthz', (req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: err.message });
+  }
+});
+
 // In production the built customer web app (web/dist) is served by this same
 // process, so the whole product is one deployable service. In local dev that
 // folder doesn't exist (the web app runs via its own Vite dev server instead).
@@ -123,3 +134,5 @@ const port = process.env.PORT || 4000;
 server.listen(port, () => {
   console.log(`SAMWILL Online Order server listening on http://localhost:${port}`);
 });
+
+require('./lib/backup').scheduleBackups();
