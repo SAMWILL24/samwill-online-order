@@ -182,6 +182,11 @@ router.get(
   requireOwner('Only the store owner can view payment settings'),
   renderPage('admin/settings/payments', 'settings', 'payments')
 );
+router.get(
+  '/settings/devices',
+  requireOwner('Only the store owner can manage devices'),
+  renderPage('admin/settings/devices', 'settings', 'devices')
+);
 
 // ---- JSON API for dashboard/menu/settings pages ----
 
@@ -919,6 +924,40 @@ router.delete('/api/photos/:filename', (req, res) => {
 
 router.get('/api/payments-status', (req, res) => {
   res.json({ cardpointeConfigured: cardpointe.isConfigured(req.store) });
+});
+
+// ---- Devices: kitchen display + receipt printer ----
+// Both are owner-only, same reasoning as payments: these hand out standing
+// access to this store's live order stream to whatever physical device holds
+// the link/key, so only the owner should be able to view or regenerate them.
+
+router.get('/api/devices', requireOwner('Only the store owner can manage devices'), (req, res) => {
+  const store = db
+    .prepare('SELECT slug, kitchen_display_token, printer_enabled, printer_key FROM stores WHERE id = ?')
+    .get(req.store.id);
+  res.json({
+    kitchenDisplayUrl: store.kitchen_display_token ? `/${store.slug}/kitchen?token=${store.kitchen_display_token}` : null,
+    printerEnabled: Boolean(store.printer_enabled),
+    cloudprntUrl: store.printer_key ? `/api/${store.slug}/print/cloudprnt?key=${store.printer_key}` : null,
+  });
+});
+
+router.post('/api/devices/kitchen-token/regenerate', requireOwner('Only the store owner can manage devices'), (req, res) => {
+  const token = crypto.randomBytes(24).toString('hex');
+  db.prepare('UPDATE stores SET kitchen_display_token = ? WHERE id = ?').run(token, req.store.id);
+  res.json({ kitchenDisplayUrl: `/${req.store.slug}/kitchen?token=${token}` });
+});
+
+router.put('/api/devices/printer', requireOwner('Only the store owner can manage devices'), (req, res) => {
+  const { enabled } = req.body || {};
+  db.prepare('UPDATE stores SET printer_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, req.store.id);
+  res.json({ ok: true });
+});
+
+router.post('/api/devices/printer/regenerate-key', requireOwner('Only the store owner can manage devices'), (req, res) => {
+  const key = crypto.randomBytes(24).toString('hex');
+  db.prepare('UPDATE stores SET printer_key = ? WHERE id = ?').run(key, req.store.id);
+  res.json({ cloudprntUrl: `/api/${req.store.slug}/print/cloudprnt?key=${key}` });
 });
 
 function isYes(v) {

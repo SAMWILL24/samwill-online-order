@@ -6,6 +6,7 @@ const { resolveRedemption, earnPoints, redeemPoints, LoyaltyError } = require('.
 const { optionalCustomerAuth, requireCustomerAuth } = require('../middleware/auth');
 const cardpointe = require('../lib/cardpointe');
 const { sendOrderConfirmation, sendNewOrderAlert } = require('../lib/orderEmails');
+const { enqueuePrintJob } = require('../lib/printQueue');
 
 const router = express.Router();
 
@@ -252,6 +253,11 @@ router.post('/', optionalCustomerAuth, async (req, res) => {
   sendNewOrderAlert(req.store, serializeOrder(order)).catch((err) =>
     console.error('[email] new order alert failed:', err.message)
   );
+  try {
+    enqueuePrintJob(req.store, serializeOrder(order));
+  } catch (err) {
+    console.error('[print] failed to enqueue kitchen ticket:', err.message);
+  }
 
   res.status(201).json({
     order: serializeOrder(order),

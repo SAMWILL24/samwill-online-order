@@ -34,6 +34,14 @@ CREATE TABLE IF NOT EXISTS stores (
   cardpointe_username TEXT,
   cardpointe_password TEXT,
   cardpointe_testmode INTEGER NOT NULL DEFAULT 1,
+  -- A long-lived secret embedded in the kitchen display's URL - lets a
+  -- tablet mounted in the kitchen stay logged in indefinitely without a
+  -- real admin session (and without exposing it to a guessable URL).
+  kitchen_display_token TEXT,
+  -- Likewise embedded in the physical receipt printer's own CloudPRNT
+  -- configuration, so its poll requests don't need a real admin session.
+  printer_enabled INTEGER NOT NULL DEFAULT 0,
+  printer_key TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -254,3 +262,18 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
+
+-- A small print queue for the kitchen receipt printer. A new order enqueues
+-- one row here; the printer's CloudPRNT poll picks up the oldest pending job
+-- for its store, and its own random job_token (not the sequential id) is
+-- what the printer must present back to fetch/confirm it - see lib/cloudprnt.js.
+CREATE TABLE IF NOT EXISTS print_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+  job_token TEXT NOT NULL,
+  content TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'done')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_print_jobs_store_status ON print_jobs(store_id, status);

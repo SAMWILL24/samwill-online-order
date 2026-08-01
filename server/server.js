@@ -84,6 +84,8 @@ app.post('/admin/login', (req, res) => {
 });
 
 app.use('/:storeSlug/admin', resolveStore, require('./routes/admin'));
+app.use('/:storeSlug/kitchen', resolveStore, require('./routes/kitchen'));
+app.use('/api/:storeSlug/print', resolveStore, require('./routes/print'));
 
 app.get('/', (req, res) => res.json({ ok: true, service: 'samwill-online-order-server' }));
 
@@ -131,6 +133,19 @@ io.on('connection', (socket) => {
     const storeId = payload && payload.storeId;
     const orderId = payload && payload.orderId;
     if (storeId && orderId) socket.join(`order:${storeId}:${orderId}`);
+  });
+
+  // The kitchen display authenticates with its own long-lived token instead
+  // of a real admin session, but streams the same admin:{storeId} room the
+  // regular dashboard uses - both see every order the moment it comes in.
+  socket.on('join-kitchen', (payload) => {
+    const storeId = payload && payload.storeId;
+    const token = payload && payload.token;
+    if (!storeId || !token) return;
+    const store = db.prepare('SELECT kitchen_display_token FROM stores WHERE id = ?').get(storeId);
+    if (store && store.kitchen_display_token && store.kitchen_display_token === token) {
+      socket.join(`admin:${storeId}`);
+    }
   });
 });
 

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Kitchen Display - <%= store.name %></title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #111318; color: #f3f4f6; margin: 0; padding: 1.25rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 1rem; display: flex; align-items: center; gap: 0.75rem; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: #22c55e; }
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+    .card { background: #1c1f26; border-radius: 14px; padding: 1.25rem; border: 1px solid #2b2f38; }
+    .card .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
+    .card .order-num { font-size: 1.4rem; font-weight: 800; }
+    .card .type { font-size: 1rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; }
+    .card .time { font-size: 0.95rem; color: #9ca3af; margin-bottom: 0.75rem; }
+    .card ul { list-style: none; margin: 0 0 1rem; padding: 0; font-size: 1.15rem; line-height: 1.6; }
+    .card .notes { color: #facc15; font-size: 1rem; margin-bottom: 0.75rem; }
+    .status-btn { width: 100%; padding: 1rem; font-size: 1.15rem; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; background: #0d9488; color: #fff; }
+    .status-btn:active { background: #0f766e; }
+    .empty { text-align: center; color: #6b7280; font-size: 1.4rem; padding: 4rem 0; }
+    .badge-new { animation: pulse 1.4s ease-in-out 3; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.7); } 50% { box-shadow: 0 0 0 10px rgba(13,148,136,0); } }
+  </style>
+</head>
+<body>
+  <h1><span class="dot"></span> <%= store.name %> &mdash; Kitchen</h1>
+  <div id="board" class="board"></div>
+
+  <audio id="ding" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" type="audio/wav" />
+  </audio>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const STORE_ID = <%= store.id %>;
+    const STORE_SLUG = '<%= store.slug %>';
+    const TOKEN = '<%= token %>';
+    const socket = io();
+    socket.on('connect', () => socket.emit('join-kitchen', { storeId: STORE_ID, token: TOKEN }));
+
+    // Next status in the flow, one tap moves an order forward - no dropdown
+    // to fumble with on a kitchen tablet.
+    const NEXT_STATUS = {
+      placed: 'confirmed',
+      confirmed: 'preparing',
+      preparing: 'ready',
+      ready: 'completed',
+      out_for_delivery: 'completed',
+    };
+    const BUTTON_LABEL = {
+      placed: 'Confirm',
+      confirmed: 'Start Preparing',
+      preparing: 'Mark Ready',
+      ready: 'Complete',
+      out_for_delivery: 'Complete',
+    };
+
+    let orders = [];
+
+    async function loadOrders() {
+      const res = await fetch(`/${STORE_SLUG}/kitchen/api/orders?token=${TOKEN}`);
+      const data = await res.json();
+      orders = data.orders;
+      render();
+    }
+
+    function render() {
+      const board = document.getElementById('board');
+      if (!orders.length) {
+        board.innerHTML = '<div class="empty">No active orders.</div>';
+        return;
+      }
+      board.innerHTML = orders.map((o) => {
+        const next = NEXT_STATUS[o.status];
+        return `
+          <div class="card" data-order-id="${o.id}">
+            <div class="top">
+              <span class="order-num">#${o.id}</span>
+              <span class="type">${o.type.replaceAll('_', ' ')}</span>
+            </div>
+            <div class="time">requested ${o.requestedTime} &middot; ${new Date(o.createdAt).toLocaleTimeString()}</div>
+            <ul>
+              ${o.items.map((i) => {
+                const name = i.isHalfAndHalf ? `Half ${i.menuItemName} / Half ${i.secondMenuItemName}` : i.menuItemName;
+                const extras = i.extras.length
+                  ? ' + ' + i.extras.map((e) => (i.isHalfAndHalf ? `${e.name} (${e.half})` : e.name)).join(', ')
+                  : '';
+                return `<li>${i.quantity}x ${name} (${i.sizeLabel})${extras}</li>`;
+              }).join('')}
+            </ul>
+            ${o.notes ? `<div class="notes">Note: ${o.notes}</div>` : ''}
+            ${next ? `<button class="status-btn" onclick="advance(${o.id}, '${next}')">${BUTTON_LABEL[o.status]}</button>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function advance(id, status) {
+      await fetch(`/${STORE_SLUG}/kitchen/api/orders/${id}?token=${TOKEN}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    }
+
+    socket.on('order:new', (order) => {
+      orders.push(order);
+      render();
+      const card = document.querySelector(`[data-order-id="${order.id}"]`);
+      if (card) card.classList.add('badge-new');
+      document.getElementById('ding').play().catch(() => {});
+    });
+
+    socket.on('order:update', (order) => {
+      const idx = orders.findIndex((o) => o.id === order.id);
+      if (order.status === 'completed' || order.status === 'cancelled') {
+        if (idx >= 0) orders.splice(idx, 1);
+      } else if (idx >= 0) {
+        orders[idx] = order;
+      } else {
+        orders.push(order);
+      }
+      render();
+    });
+
+    loadOrders();
+  </script>
+</body>
+</html>

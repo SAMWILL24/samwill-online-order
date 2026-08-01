@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Devices - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
+  <style>
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8rem; color: #999; margin-bottom: 0.25rem; }
+    .url-box { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .url-box input { flex: 1; min-width: 280px; font-family: monospace; font-size: 0.85rem; }
+    .toggle-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; margin: 1rem 0; }
+    .hint { color: #999; font-size: 0.85rem; margin: 0.5rem 0 1rem; line-height: 1.5; }
+  </style>
+
+  <h1>Settings</h1>
+  <div class="tabs">
+    <a href="/<%= store.slug %>/admin/settings/restaurant-profile" class="<%= page === 'restaurant-profile' ? 'active' : '' %>">Restaurant Profile</a>
+    <a href="/<%= store.slug %>/admin/settings/business-hours" class="<%= page === 'business-hours' ? 'active' : '' %>">Business Hours</a>
+    <a href="/<%= store.slug %>/admin/settings/order-channels" class="<%= page === 'order-channels' ? 'active' : '' %>">Order Channels</a>
+    <a href="/<%= store.slug %>/admin/settings/payments" class="<%= page === 'payments' ? 'active' : '' %>">Payments</a>
+    <a href="/<%= store.slug %>/admin/settings/devices" class="<%= page === 'devices' ? 'active' : '' %>">Devices</a>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Kitchen Display</h3>
+    <p class="hint">
+      A fullscreen order board for a tablet or spare monitor mounted in the kitchen - no login needed,
+      just open the link below on that device and leave it open. Orders appear the instant they come in,
+      with a big button to move each one forward (Confirm &rarr; Preparing &rarr; Ready &rarr; Complete).
+    </p>
+    <div class="field">
+      <label>Kitchen display link</label>
+      <div class="url-box">
+        <input id="kitchenUrl" readonly placeholder="Not generated yet" />
+        <button class="btn" type="button" onclick="copyField('kitchenUrl')">Copy</button>
+        <button class="btn" type="button" onclick="regenerateKitchenToken()">Generate new link</button>
+      </div>
+      <p class="hint">Generating a new link immediately breaks any device using the old one.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Kitchen Receipt Printer</h3>
+    <p class="hint">
+      Auto-prints a ticket for every new order on a network receipt printer that supports Star Micronics'
+      CloudPRNT (most Star printers, configured from the printer's own setup page). Point the printer's
+      "CloudPRNT URL" at the link below - it polls this address itself, so the printer needs its own
+      network connection but nothing installed on any computer.
+    </p>
+    <div class="toggle-row">
+      <input type="checkbox" id="printerEnabled" onchange="togglePrinter(this.checked)" />
+      <label for="printerEnabled" style="margin:0;">Print a ticket automatically for every new order</label>
+    </div>
+    <div class="field">
+      <label>CloudPRNT URL (enter this on the printer)</label>
+      <div class="url-box">
+        <input id="cloudprntUrl" readonly placeholder="Not generated yet" />
+        <button class="btn" type="button" onclick="copyField('cloudprntUrl')">Copy</button>
+        <button class="btn" type="button" onclick="regeneratePrinterKey()">Generate new key</button>
+      </div>
+      <p class="hint">Generating a new key immediately stops the old printer setup from working until it's reconfigured with the new URL.</p>
+    </div>
+  </div>
+
+  <script>
+    const STORE_SLUG = '<%= store.slug %>';
+    const ORIGIN = window.location.origin;
+
+    function copyField(id) {
+      const input = document.getElementById(id);
+      if (!input.value) return;
+      navigator.clipboard.writeText(input.value);
+    }
+
+    async function load() {
+      const res = await fetch(`/${STORE_SLUG}/admin/api/devices`);
+      const data = await res.json();
+      document.getElementById('kitchenUrl').value = data.kitchenDisplayUrl ? ORIGIN + data.kitchenDisplayUrl : '';
+      document.getElementById('cloudprntUrl').value = data.cloudprntUrl ? ORIGIN + data.cloudprntUrl : '';
+      document.getElementById('printerEnabled').checked = Boolean(data.printerEnabled);
+    }
+
+    async function regenerateKitchenToken() {
+      const res = await fetch(`/${STORE_SLUG}/admin/api/devices/kitchen-token/regenerate`, { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('kitchenUrl').value = ORIGIN + data.kitchenDisplayUrl;
+    }
+
+    async function regeneratePrinterKey() {
+      const res = await fetch(`/${STORE_SLUG}/admin/api/devices/printer/regenerate-key`, { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('cloudprntUrl').value = ORIGIN + data.cloudprntUrl;
+    }
+
+    async function togglePrinter(enabled) {
+      await fetch(`/${STORE_SLUG}/admin/api/devices/printer`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+    }
+
+    load();
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>
