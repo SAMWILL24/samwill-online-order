@@ -98,6 +98,18 @@ export function CheckoutPage() {
             required
           />
           <input placeholder="Phone" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} required />
+          <p className="muted" style={{ fontSize: '0.8rem' }}>
+            By providing your phone number, you agree to receive order-status text messages from{' '}
+            {settings?.name || 'this restaurant'}. Message and data rates may apply. See our{' '}
+            <a href={`/${storeSlug}/terms`} target="_blank" rel="noreferrer">
+              Terms
+            </a>{' '}
+            and{' '}
+            <a href={`/${storeSlug}/privacy`} target="_blank" rel="noreferrer">
+              Privacy Policy
+            </a>
+            .
+          </p>
         </div>
       )}
 
