@@ -263,6 +263,22 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
 
+-- Separate table (not password_reset_tokens) because a platform admin has no
+-- store context at all - reusing that table would mean loosening its
+-- store_id NOT NULL/account_type CHECK, which means rebuilding a table that
+-- already holds live customer/admin reset tokens in production. A platform
+-- admin is also a single global account (typically just one row), so a
+-- dedicated table costs nothing.
+CREATE TABLE IF NOT EXISTS platform_reset_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  platform_admin_id INTEGER NOT NULL REFERENCES platform_admins(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_platform_reset_tokens_hash ON platform_reset_tokens(token_hash);
+
 -- One row per emailed staff-login code (see lib/loginOtp.js). Covers both
 -- per-store admin_users and the global platform_admins account, mirroring
 -- password_reset_tokens' account_type/account_id shape. A fresh code

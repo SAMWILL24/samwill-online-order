@@ -44,4 +44,18 @@ async function sendLoginOtpEmail(email, code, label = 'SAMWILL') {
   });
 }
 
-module.exports = { sendPasswordResetEmail, sendStaffInviteEmail, sendLoginOtpEmail };
+async function sendPlatformPasswordResetEmail(email, rawToken) {
+  const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+  const url = `${base}/admin/reset-password?token=${rawToken}`;
+  await sendEmail({
+    to: email,
+    subject: 'SAMWILL: Reset your password',
+    text: `We received a request to reset your password.\n\nReset it here (link expires in 1 hour): ${url}\n\nIf you didn't request this, you can ignore this email.`,
+    html:
+      `<p>We received a request to reset your password.</p>` +
+      `<p><a href="${url}">Reset your password</a> (link expires in 1 hour)</p>` +
+      `<p>If you didn't request this, you can ignore this email.</p>`,
+  });
+}
+
+module.exports = { sendPasswordResetEmail, sendStaffInviteEmail, sendLoginOtpEmail, sendPlatformPasswordResetEmail };

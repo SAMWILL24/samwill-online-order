@@ -14,7 +14,8 @@ const bcrypt = require('bcryptjs');
 const { dataDir } = require('./lib/paths');
 const { resolveStore } = require('./middleware/resolveStore');
 const { createOtp, verifyOtp, msUntilResendAllowed } = require('./lib/loginOtp');
-const { sendLoginOtpEmail } = require('./lib/authEmails');
+const { sendLoginOtpEmail, sendPlatformPasswordResetEmail } = require('./lib/authEmails');
+const { createResetToken, consumeResetToken } = require('./lib/platformPasswordReset');
 const { loginLimiter, forgotPasswordLimiter } = require('./middleware/rateLimit');
 
 // Comma-separated list in dev (web app + Expo web preview run on different ports);
@@ -145,6 +146,54 @@ app.post('/admin/login/verify/resend', forgotPasswordLimiter, async (req, res) =
 
   await sendPendingGateOtp({ id: pendingAdminId, email: pendingAdminEmail });
   res.render('admin-gate-verify-otp', { error: 'A new code has been sent.' });
+});
+
+app.get('/admin/forgot-password', (req, res) => {
+  res.render('admin-gate-forgot-password', { sent: false });
+});
+
+app.post('/admin/forgot-password', forgotPasswordLimiter, async (req, res) => {
+  const email = (req.body.email || '').toLowerCase();
+  const platformAdmin = email
+    ? db.prepare('SELECT * FROM platform_admins WHERE email = ?').get(email)
+    : null;
+
+  // Always show the same "check your email" page whether or not the
+  // account exists, so this can't be used to discover valid emails.
+  if (platformAdmin) {
+    const rawToken = createResetToken(platformAdmin.id);
+    try {
+      await sendPlatformPasswordResetEmail(platformAdmin.email, rawToken);
+    } catch (err) {
+      console.error('[email] platform admin password reset failed:', err.message);
+    }
+  }
+
+  res.render('admin-gate-forgot-password', { sent: true });
+});
+
+app.get('/admin/reset-password', (req, res) => {
+  res.render('admin-gate-reset-password', { token: req.query.token || null, error: null });
+});
+
+app.post('/admin/reset-password', loginLimiter, (req, res) => {
+  const { token, password, confirmPassword } = req.body || {};
+
+  if (!password || password.length < 8) {
+    return res.render('admin-gate-reset-password', { token, error: 'Password must be at least 8 characters' });
+  }
+  if (password !== confirmPassword) {
+    return res.render('admin-gate-reset-password', { token, error: "Passwords don't match" });
+  }
+
+  const platformAdminId = consumeResetToken(token);
+  if (!platformAdminId) {
+    return res.render('admin-gate-reset-password', { token: null, error: 'This reset link is invalid or has expired' });
+  }
+
+  const passwordHash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE platform_admins SET password_hash = ? WHERE id = ?').run(passwordHash, platformAdminId);
+  res.redirect('/admin');
 });
 
 app.use('/:storeSlug/admin', resolveStore, require('./routes/admin'));
