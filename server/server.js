@@ -13,6 +13,9 @@ const db = require('./db'); // ensure schema is applied before routes touch it
 const bcrypt = require('bcryptjs');
 const { dataDir } = require('./lib/paths');
 const { resolveStore } = require('./middleware/resolveStore');
+const { createOtp, verifyOtp, msUntilResendAllowed } = require('./lib/loginOtp');
+const { sendLoginOtpEmail } = require('./lib/authEmails');
+const { loginLimiter, forgotPasswordLimiter } = require('./middleware/rateLimit');
 
 // Comma-separated list in dev (web app + Expo web preview run on different ports);
 // a single origin (or the deployed site's domain) in production.
@@ -71,16 +74,77 @@ app.get('/admin', (req, res) => {
   res.render('store-picker', { stores });
 });
 
-app.post('/admin/login', (req, res) => {
+async function sendPendingGateOtp(platformAdmin) {
+  const code = createOtp(null, 'platform', platformAdmin.id);
+  try {
+    await sendLoginOtpEmail(platformAdmin.email, code);
+  } catch (err) {
+    console.error('[email] platform admin login code failed:', err.message);
+  }
+}
+
+app.post('/admin/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
   const platformAdmin = db.prepare('SELECT * FROM platform_admins WHERE email = ?').get((email || '').toLowerCase());
   if (!platformAdmin || !bcrypt.compareSync(password || '', platformAdmin.password_hash)) {
     return res.render('admin-gate-login', { error: 'Invalid email or password' });
   }
-  req.session.adminId = platformAdmin.id;
+  req.session.pendingAdminId = platformAdmin.id;
+  req.session.pendingAdminEmail = platformAdmin.email;
+  await sendPendingGateOtp(platformAdmin);
+  res.redirect('/admin/login/verify');
+});
+
+app.get('/admin/login/verify', (req, res) => {
+  if (!req.session.pendingAdminId) {
+    return res.redirect('/admin');
+  }
+  res.render('admin-gate-verify-otp', { error: null });
+});
+
+app.post('/admin/login/verify', loginLimiter, (req, res) => {
+  const { pendingAdminId, pendingAdminEmail } = req.session;
+  if (!pendingAdminId) {
+    return res.redirect('/admin');
+  }
+
+  const result = verifyOtp(null, 'platform', pendingAdminId, req.body.code);
+
+  if (!result.ok) {
+    if (result.reason === 'locked' || result.reason === 'no_code' || result.reason === 'expired') {
+      delete req.session.pendingAdminId;
+      delete req.session.pendingAdminEmail;
+      return res.render('admin-gate-login', {
+        error: 'That code expired or had too many wrong attempts. Please log in again.',
+      });
+    }
+    return res.render('admin-gate-verify-otp', { error: 'Incorrect code. Please try again.' });
+  }
+
+  req.session.adminId = pendingAdminId;
   req.session.isPlatformAdmin = true;
-  req.session.adminEmail = platformAdmin.email;
+  req.session.adminEmail = pendingAdminEmail;
+  delete req.session.pendingAdminId;
+  delete req.session.pendingAdminEmail;
+
   res.redirect('/admin');
+});
+
+app.post('/admin/login/verify/resend', forgotPasswordLimiter, async (req, res) => {
+  const { pendingAdminId, pendingAdminEmail } = req.session;
+  if (!pendingAdminId) {
+    return res.redirect('/admin');
+  }
+
+  const waitMs = msUntilResendAllowed(null, 'platform', pendingAdminId);
+  if (waitMs > 0) {
+    return res.render('admin-gate-verify-otp', {
+      error: `Please wait ${Math.ceil(waitMs / 1000)}s before requesting another code.`,
+    });
+  }
+
+  await sendPendingGateOtp({ id: pendingAdminId, email: pendingAdminEmail });
+  res.render('admin-gate-verify-otp', { error: 'A new code has been sent.' });
 });
 
 app.use('/:storeSlug/admin', resolveStore, require('./routes/admin'));

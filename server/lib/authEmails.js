@@ -31,4 +31,17 @@ async function sendStaffInviteEmail(store, email, rawToken) {
   });
 }
 
-module.exports = { sendPasswordResetEmail, sendStaffInviteEmail };
+// label is a store's name for a per-store admin login, or omitted for the
+// store-less platform-admin gate login (server.js's bare /admin).
+async function sendLoginOtpEmail(email, code, label = 'SAMWILL') {
+  await sendEmail({
+    to: email,
+    subject: `${label}: Your login code`,
+    text: `Your login code is ${code}.\n\nIt expires in 10 minutes. If you didn't try to log in, you can ignore this email.`,
+    html:
+      `<p>Your login code is <strong>${code}</strong>.</p>` +
+      `<p>It expires in 10 minutes. If you didn't try to log in, you can ignore this email.</p>`,
+  });
+}
+
+module.exports = { sendPasswordResetEmail, sendStaffInviteEmail, sendLoginOtpEmail };

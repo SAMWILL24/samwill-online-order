@@ -12,7 +12,8 @@ const { resolveRecipientPhone, sendOrderReadySms, isOrderFinishedForCustomer } =
 const cardpointe = require('../lib/cardpointe');
 const crypto = require('crypto');
 const { createResetToken, consumeResetToken } = require('../lib/passwordReset');
-const { sendPasswordResetEmail, sendStaffInviteEmail } = require('../lib/authEmails');
+const { sendPasswordResetEmail, sendStaffInviteEmail, sendLoginOtpEmail } = require('../lib/authEmails');
+const { createOtp, verifyOtp, msUntilResendAllowed } = require('../lib/loginOtp');
 const { loginLimiter, forgotPasswordLimiter } = require('../middleware/rateLimit');
 const { getWeekHours, setWeekHours } = require('../lib/businessHours');
 
@@ -30,17 +31,17 @@ router.get('/login', (req, res) => {
   res.render('admin/login', { error: null, store: req.store });
 });
 
-router.post('/login', loginLimiter, (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
   const normalizedEmail = (email || '').toLowerCase();
 
   const platformAdmin = db.prepare('SELECT * FROM platform_admins WHERE email = ?').get(normalizedEmail);
   if (platformAdmin && bcrypt.compareSync(password || '', platformAdmin.password_hash)) {
-    req.session.adminId = platformAdmin.id;
-    req.session.isPlatformAdmin = true;
-    req.session.storeId = req.store.id;
-    req.session.adminEmail = platformAdmin.email;
-    return res.redirect(`/${req.store.slug}/admin`);
+    req.session.pendingAdminId = platformAdmin.id;
+    req.session.pendingIsPlatformAdmin = true;
+    req.session.pendingAdminEmail = platformAdmin.email;
+    await sendPendingOtp(req, 'platform', platformAdmin.id, platformAdmin.email);
+    return res.redirect(`/${req.store.slug}/admin/login/verify`);
   }
 
   const admin = db
@@ -49,12 +50,84 @@ router.post('/login', loginLimiter, (req, res) => {
   if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
     return res.render('admin/login', { error: 'Invalid email or password', store: req.store });
   }
-  req.session.adminId = admin.id;
-  req.session.isPlatformAdmin = false;
+  req.session.pendingAdminId = admin.id;
+  req.session.pendingIsPlatformAdmin = false;
+  req.session.pendingAdminEmail = admin.email;
+  req.session.pendingRole = admin.role;
+  await sendPendingOtp(req, 'admin', admin.id, admin.email);
+  res.redirect(`/${req.store.slug}/admin/login/verify`);
+});
+
+// Shared by the initial /login success and the resend action.
+async function sendPendingOtp(req, accountType, accountId, email) {
+  const code = createOtp(req.store.id, accountType, accountId);
+  try {
+    await sendLoginOtpEmail(email, code, req.store.name);
+  } catch (err) {
+    console.error('[email] admin login code failed:', err.message);
+  }
+}
+
+router.get('/login/verify', (req, res) => {
+  if (!req.session.pendingAdminId) {
+    return res.redirect(`/${req.store.slug}/admin/login`);
+  }
+  res.render('admin/verify-otp', { error: null, store: req.store });
+});
+
+router.post('/login/verify', loginLimiter, (req, res) => {
+  const { pendingAdminId, pendingIsPlatformAdmin, pendingAdminEmail, pendingRole } = req.session;
+  if (!pendingAdminId) {
+    return res.redirect(`/${req.store.slug}/admin/login`);
+  }
+
+  const accountType = pendingIsPlatformAdmin ? 'platform' : 'admin';
+  const result = verifyOtp(req.store.id, accountType, pendingAdminId, req.body.code);
+
+  if (!result.ok) {
+    if (result.reason === 'locked' || result.reason === 'no_code' || result.reason === 'expired') {
+      delete req.session.pendingAdminId;
+      delete req.session.pendingIsPlatformAdmin;
+      delete req.session.pendingAdminEmail;
+      delete req.session.pendingRole;
+      return res.render('admin/login', {
+        error: 'That code expired or had too many wrong attempts. Please log in again.',
+        store: req.store,
+      });
+    }
+    return res.render('admin/verify-otp', { error: 'Incorrect code. Please try again.', store: req.store });
+  }
+
+  req.session.adminId = pendingAdminId;
+  req.session.isPlatformAdmin = pendingIsPlatformAdmin;
   req.session.storeId = req.store.id;
-  req.session.adminEmail = admin.email;
-  req.session.role = admin.role;
+  req.session.adminEmail = pendingAdminEmail;
+  req.session.role = pendingRole;
+  delete req.session.pendingAdminId;
+  delete req.session.pendingIsPlatformAdmin;
+  delete req.session.pendingAdminEmail;
+  delete req.session.pendingRole;
+
   res.redirect(`/${req.store.slug}/admin`);
+});
+
+router.post('/login/verify/resend', forgotPasswordLimiter, async (req, res) => {
+  const { pendingAdminId, pendingIsPlatformAdmin, pendingAdminEmail } = req.session;
+  if (!pendingAdminId) {
+    return res.redirect(`/${req.store.slug}/admin/login`);
+  }
+
+  const accountType = pendingIsPlatformAdmin ? 'platform' : 'admin';
+  const waitMs = msUntilResendAllowed(req.store.id, accountType, pendingAdminId);
+  if (waitMs > 0) {
+    return res.render('admin/verify-otp', {
+      error: `Please wait ${Math.ceil(waitMs / 1000)}s before requesting another code.`,
+      store: req.store,
+    });
+  }
+
+  await sendPendingOtp(req, accountType, pendingAdminId, pendingAdminEmail);
+  res.render('admin/verify-otp', { error: 'A new code has been sent.', store: req.store });
 });
 
 // Sessions created before role-checking shipped won't have session.role

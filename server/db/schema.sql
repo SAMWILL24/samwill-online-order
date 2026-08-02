@@ -263,6 +263,26 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
 
+-- One row per emailed staff-login code (see lib/loginOtp.js). Covers both
+-- per-store admin_users and the global platform_admins account, mirroring
+-- password_reset_tokens' account_type/account_id shape. A fresh code
+-- invalidates any earlier unused one for the same account, and attempts is
+-- capped, so a code can't be brute-forced by retyping digits. store_id is
+-- nullable because a platform admin can also sign in through the bare
+-- /admin gate (server.js), which has no store in scope at all.
+CREATE TABLE IF NOT EXISTS login_otp_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+  account_type TEXT NOT NULL CHECK (account_type IN ('admin', 'platform')),
+  account_id INTEGER NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_login_otp_codes_account ON login_otp_codes(store_id, account_type, account_id);
+
 -- A small print queue for the kitchen receipt printer. A new order enqueues
 -- one row here; the printer's CloudPRNT poll picks up the oldest pending job
 -- for its store, and its own random job_token (not the sequential id) is
