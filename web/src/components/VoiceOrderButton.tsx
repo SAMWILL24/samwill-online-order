@@ -10,14 +10,31 @@ interface SpeechRecognitionResultLike {
 interface SpeechRecognitionEventLike {
   results: { [index: number]: SpeechRecognitionResultLike; length: number };
 }
+interface SpeechRecognitionErrorLike {
+  error: string;
+}
 interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: unknown) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
+}
+
+// Browsers don't surface a human-readable message for speech recognition
+// failures - just a short error code - so map the ones customers will
+// actually hit to something they can act on.
+const ERROR_MESSAGES: Record<string, string> = {
+  'not-allowed': 'Microphone access is blocked for this site. Check your browser\'s site settings and allow the microphone, then try again.',
+  'service-not-allowed': 'Microphone access is blocked for this site. Check your browser\'s site settings and allow the microphone, then try again.',
+  'audio-capture': "No microphone was found on this device.",
+  'no-speech': "Didn't catch that - please try again and speak right after tapping the button.",
+  network: 'Connection issue while listening - check your internet and try again.',
+};
+function messageForSpeechError(code: string): string {
+  return ERROR_MESSAGES[code] || 'Could not hear you clearly - please try again.';
 }
 
 function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
@@ -74,8 +91,8 @@ export function VoiceOrderButton() {
         setStage('error');
       }
     };
-    recognition.onerror = () => {
-      setError('Could not hear you clearly - please try again');
+    recognition.onerror = (event) => {
+      setError(messageForSpeechError(event.error));
       setStage('error');
     };
     recognition.onend = () => {
