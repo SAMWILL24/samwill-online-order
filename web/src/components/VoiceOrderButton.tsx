@@ -30,12 +30,19 @@ function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
 
 type Stage = 'idle' | 'listening' | 'processing' | 'reviewing' | 'error';
 
+const LANGUAGES = [
+  { code: 'en-US', label: '🎤 Order by voice', listening: '🎤 Listening... say your order' },
+  { code: 'ar-EG', label: '🎤 اطلب بصوتك', listening: '🎤 بسمعك... قول طلبك' },
+  { code: 'es-US', label: '🎤 Ordenar por voz', listening: '🎤 Escuchando... di tu pedido' },
+];
+
 export function VoiceOrderButton() {
   const { api, addToCart } = useApp();
   const [supported, setSupported] = useState(true);
   const [stage, setStage] = useState<Stage>('idle');
   const [result, setResult] = useState<VoiceOrderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lang, setLang] = useState<string>('en-US');
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
@@ -49,11 +56,11 @@ export function VoiceOrderButton() {
       .catch(() => setSupported(false));
   }, [api]);
 
-  function startListening() {
+  function startListening(lang: string) {
     const SpeechRecognitionCtor = getSpeechRecognition();
     if (!SpeechRecognitionCtor) return;
     const recognition = new SpeechRecognitionCtor();
-    recognition.lang = 'en-US';
+    recognition.lang = lang;
     recognition.interimResults = false;
     recognition.onresult = async (event) => {
       const transcript = event.results[event.results.length - 1][0].transcript;
@@ -75,6 +82,7 @@ export function VoiceOrderButton() {
       setStage((s) => (s === 'listening' ? 'idle' : s));
     };
     recognitionRef.current = recognition;
+    setLang(lang);
     setError(null);
     setStage('listening');
     recognition.start();
@@ -109,16 +117,28 @@ export function VoiceOrderButton() {
 
   return (
     <>
-      <button className="btn voice-order-btn" type="button" onClick={startListening} disabled={stage !== 'idle'}>
-        🎤 Order by voice
-      </button>
+      <div className="voice-order-lang-row">
+        {LANGUAGES.map((l) => (
+          <button
+            key={l.code}
+            className="btn voice-order-btn"
+            type="button"
+            onClick={() => startListening(l.code)}
+            disabled={stage !== 'idle'}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
 
       {stage !== 'idle' && (
         <div className="voice-order-overlay">
           <div className="voice-order-panel">
             {stage === 'listening' && (
               <>
-                <p className="voice-order-status">🎤 Listening... say your order</p>
+                <p className="voice-order-status">
+                  {LANGUAGES.find((l) => l.code === lang)?.listening}
+                </p>
                 <button className="btn" type="button" onClick={cancel}>
                   Cancel
                 </button>
