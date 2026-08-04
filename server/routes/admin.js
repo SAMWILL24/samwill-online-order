@@ -14,7 +14,8 @@ const crypto = require('crypto');
 const { createResetToken, consumeResetToken } = require('../lib/passwordReset');
 const { sendPasswordResetEmail, sendStaffInviteEmail, sendLoginOtpEmail } = require('../lib/authEmails');
 const { createOtp, verifyOtp, msUntilResendAllowed } = require('../lib/loginOtp');
-const { loginLimiter, forgotPasswordLimiter } = require('../middleware/rateLimit');
+const { loginLimiter, forgotPasswordLimiter, menuImportLimiter } = require('../middleware/rateLimit');
+const menuImport = require('../lib/menuImport');
 const { getWeekHours, setWeekHours } = require('../lib/businessHours');
 
 const router = express.Router();
@@ -222,6 +223,7 @@ router.get('/menu/items', renderPage('admin/menu/items', 'menu', 'items'));
 router.get('/menu/categories', renderPage('admin/menu/categories', 'menu', 'categories'));
 router.get('/menu/add-ons', renderPage('admin/menu/add-ons', 'menu', 'add-ons'));
 router.get('/menu/modifiers', (req, res) => res.redirect(`/${req.store.slug}/admin/menu/add-ons`));
+router.get('/menu/import', renderPage('admin/menu/import', 'menu', 'import'));
 
 router.get('/marketing', (req, res) => res.redirect(`/${req.store.slug}/admin/marketing/coupons`));
 router.get('/marketing/coupons', renderPage('admin/marketing/coupons', 'marketing', 'coupons'));
@@ -266,6 +268,76 @@ router.get(
 
 router.get('/api/menu', (req, res) => {
   res.json({ categories: getFullMenu(req.store.id, { includeInactive: true }) });
+});
+
+router.get('/api/menu/import/status', (req, res) => {
+  res.json({ configured: menuImport.isConfigured() });
+});
+
+router.post('/api/menu/import/parse', menuImportLimiter, upload.single('image'), async (req, res) => {
+  if (!menuImport.isConfigured()) return res.status(503).json({ error: 'Menu import is not available' });
+  try {
+    let categories;
+    if (req.file) {
+      const mediaType = req.file.mimetype;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType)) {
+        return res.status(400).json({ error: 'Image must be JPEG, PNG, or WebP' });
+      }
+      categories = await menuImport.parseMenuFromImage(req.file.buffer.toString('base64'), mediaType);
+    } else if (req.body?.text) {
+      categories = await menuImport.parseMenuFromText(req.body.text);
+    } else {
+      return res.status(400).json({ error: 'Provide menu text or an image' });
+    }
+    res.json({ categories });
+  } catch (err) {
+    console.error('[menu-import] parse failed:', err.message);
+    res.status(502).json({ error: 'Could not read that menu right now, please try again' });
+  }
+});
+
+// The parse step only proposes data - nothing is written until the admin
+// reviews it here and explicitly commits, same two-step shape as the
+// voice-order review screen before it hits the cart.
+router.post('/api/menu/import/commit', (req, res) => {
+  const categories = Array.isArray(req.body?.categories) ? req.body.categories : [];
+  if (!categories.length) return res.status(400).json({ error: 'No categories to import' });
+
+  const insertCategory = db.prepare('INSERT INTO categories (store_id, name, sort_order) VALUES (?, ?, ?)');
+  const insertItem = db.prepare(
+    'INSERT INTO menu_items (category_id, name, description, sort_order) VALUES (?, ?, ?, ?)'
+  );
+  const insertSize = db.prepare(
+    'INSERT INTO item_sizes (menu_item_id, label, price_cents, sort_order) VALUES (?, ?, ?, ?)'
+  );
+
+  let importedCategories = 0;
+  let importedItems = 0;
+
+  const run = db.transaction(() => {
+    categories.forEach((cat, catIndex) => {
+      const name = typeof cat?.name === 'string' ? cat.name.trim() : '';
+      if (!name) return;
+      const catInfo = insertCategory.run(req.store.id, name, catIndex);
+      importedCategories += 1;
+      const items = Array.isArray(cat.items) ? cat.items : [];
+      items.forEach((item, itemIndex) => {
+        const itemName = typeof item?.name === 'string' ? item.name.trim() : '';
+        if (!itemName) return;
+        const itemInfo = insertItem.run(catInfo.lastInsertRowid, itemName, item.description || null, itemIndex);
+        importedItems += 1;
+        const sizes = Array.isArray(item.sizes) && item.sizes.length ? item.sizes : [{ label: 'Regular', priceCents: 0 }];
+        sizes.forEach((size, sizeIndex) => {
+          const label = typeof size?.label === 'string' && size.label.trim() ? size.label.trim() : 'Regular';
+          const priceCents = Number.isInteger(size?.priceCents) && size.priceCents >= 0 ? size.priceCents : 0;
+          insertSize.run(itemInfo.lastInsertRowid, label, priceCents, sizeIndex);
+        });
+      });
+    });
+  });
+  run();
+
+  res.status(201).json({ importedCategories, importedItems });
 });
 
 router.post('/api/categories', (req, res) => {

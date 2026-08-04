@@ -32,4 +32,14 @@ const voiceOrderLimiter = rateLimit({
   message: { error: 'Too many voice order attempts. Please try again later.' },
 });
 
-module.exports = { loginLimiter, forgotPasswordLimiter, voiceOrderLimiter };
+// Admin-only (authenticated), so this guards against accidental rapid
+// retries burning AI cost rather than abuse from the public.
+const menuImportLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many menu import attempts. Please try again in a few minutes.' },
+});
+
+module.exports = { loginLimiter, forgotPasswordLimiter, voiceOrderLimiter, menuImportLimiter };

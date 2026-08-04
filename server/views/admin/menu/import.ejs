@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Import Menu - SAMWILL Kitchen Admin</title>
+  <%- include('../_sidebar', { section, page, adminEmail, store }) %>
+  <style>
+    .import-mode-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .import-mode-tabs button { padding: 0.4rem 1rem; border-radius: 999px; border: 1px solid #333; background: #17171a; color: #ccc; cursor: pointer; }
+    .import-mode-tabs button.active { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+    #import-textarea { width: 100%; min-height: 220px; }
+    .review-cat { border-top: 1px solid #2f2f35; padding: 0.9rem 0; }
+    .review-cat:first-child { border-top: none; }
+    .review-cat-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+    .review-cat-header input { flex: 1; font-weight: 600; }
+    .review-item { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0.4rem 0 0.4rem 1rem; flex-wrap: wrap; }
+    .review-item input.item-name { width: 200px; }
+    .review-item input.item-desc { width: 240px; }
+    .review-sizes { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
+    .review-sizes input.size-label { width: 70px; }
+    .review-sizes input.size-price { width: 70px; }
+    .review-item button, .review-cat-header button { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+    .import-summary { margin-top: 1rem; }
+    .hint { color: #999; font-size: 0.85rem; margin-bottom: 0.75rem; }
+  </style>
+
+  <h1>Menu</h1>
+  <div class="tabs">
+    <a href="/<%= store.slug %>/admin/menu/overview" class="<%= page === 'overview' ? 'active' : '' %>">Overview</a>
+    <a href="/<%= store.slug %>/admin/menu/items" class="<%= page === 'items' ? 'active' : '' %>">Items</a>
+    <a href="/<%= store.slug %>/admin/menu/categories" class="<%= page === 'categories' ? 'active' : '' %>">Categories</a>
+    <a href="/<%= store.slug %>/admin/menu/add-ons" class="<%= page === 'add-ons' ? 'active' : '' %>">Add-ons</a>
+    <a href="/<%= store.slug %>/admin/menu/import" class="<%= page === 'import' ? 'active' : '' %>">Import</a>
+  </div>
+
+  <div class="card" id="import-card">
+    <h2 style="margin-top:0;">Import menu with AI</h2>
+    <p class="hint">Paste your existing menu text, or upload a photo of a printed menu. The AI reads it and proposes categories, items, sizes, and prices below for you to check before anything is added.</p>
+
+    <div id="unconfigured-notice" style="display:none;">
+      <p class="error">Menu import isn't set up for this account yet. Contact the platform owner.</p>
+    </div>
+
+    <div id="import-form">
+      <div class="import-mode-tabs">
+        <button type="button" id="mode-text-btn" class="active" onclick="setMode('text')">Paste text</button>
+        <button type="button" id="mode-image-btn" onclick="setMode('image')">Upload photo</button>
+      </div>
+
+      <div id="mode-text">
+        <textarea id="import-textarea" placeholder="Paste your menu here, e.g.&#10;&#10;Appetizers&#10;Mozzarella Sticks - $8.99&#10;Wings (6pc) - $9.99 / (12pc) - $17.99&#10;&#10;Pizza&#10;Cheese - SM $10.99 / LG $15.99"></textarea>
+      </div>
+      <div id="mode-image" style="display:none;">
+        <input type="file" id="import-image" accept="image/jpeg,image/png,image/webp" />
+      </div>
+
+      <p class="error" id="parse-error" style="display:none;"></p>
+      <button class="btn" id="parse-btn" onclick="parseMenu()">Read menu with AI</button>
+      <span id="parse-status" class="hint" style="display:none;">Reading your menu&hellip; this can take a moment.</span>
+    </div>
+  </div>
+
+  <div class="card" id="review-card" style="display:none;">
+    <h2 style="margin-top:0;">Review before importing</h2>
+    <p class="hint">Fix anything that looks wrong, or remove items/categories you don't want. Nothing is saved until you click Import.</p>
+    <div id="review-container"></div>
+    <div class="import-summary">
+      <button class="btn secondary" onclick="cancelReview()">Discard</button>
+      <button class="btn" id="commit-btn" onclick="commitImport()">Import into menu</button>
+      <span id="commit-status" class="hint" style="display:none;"></span>
+    </div>
+  </div>
+
+  <script>
+    const STORE_SLUG = '<%= store.slug %>';
+    let mode = 'text';
+    let reviewData = [];
+
+    async function api(path, opts) {
+      const res = await fetch(`/${STORE_SLUG}/admin/api` + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Request failed');
+      }
+      return res.json();
+    }
+
+    function setMode(next) {
+      mode = next;
+      document.getElementById('mode-text-btn').classList.toggle('active', next === 'text');
+      document.getElementById('mode-image-btn').classList.toggle('active', next === 'image');
+      document.getElementById('mode-text').style.display = next === 'text' ? '' : 'none';
+      document.getElementById('mode-image').style.display = next === 'image' ? '' : 'none';
+    }
+
+    (async function checkConfigured() {
+      try {
+        const status = await api('/menu/import/status');
+        if (!status.configured) {
+          document.getElementById('unconfigured-notice').style.display = '';
+          document.getElementById('import-form').style.display = 'none';
+        }
+      } catch (e) {}
+    })();
+
+    function money(cents) { return (cents / 100).toFixed(2); }
+
+    async function parseMenu() {
+      const errorEl = document.getElementById('parse-error');
+      const statusEl = document.getElementById('parse-status');
+      const btn = document.getElementById('parse-btn');
+      errorEl.style.display = 'none';
+      statusEl.style.display = '';
+      btn.disabled = true;
+
+      try {
+        let res;
+        if (mode === 'text') {
+          const text = document.getElementById('import-textarea').value;
+          res = await fetch(`/${STORE_SLUG}/admin/api/menu/import/parse`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+        } else {
+          const file = document.getElementById('import-image').files[0];
+          if (!file) throw new Error('Choose a photo first');
+          const formData = new FormData();
+          formData.append('image', file);
+          res = await fetch(`/${STORE_SLUG}/admin/api/menu/import/parse`, { method: 'POST', body: formData });
+        }
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || 'Could not read that menu');
+        reviewData = body.categories || [];
+        renderReview();
+        document.getElementById('review-card').style.display = reviewData.length ? '' : 'none';
+        if (!reviewData.length) throw new Error('No menu items were found - try a clearer photo or more complete text');
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = '';
+      } finally {
+        statusEl.style.display = 'none';
+        btn.disabled = false;
+      }
+    }
+
+    function renderReview() {
+      const container = document.getElementById('review-container');
+      container.innerHTML = reviewData.map((cat, ci) => `
+        <div class="review-cat">
+          <div class="review-cat-header">
+            <input value="${escapeAttr(cat.name)}" onchange="reviewData[${ci}].name = this.value" />
+            <button onclick="removeCategory(${ci})">Remove category</button>
+          </div>
+          ${cat.items.map((item, ii) => `
+            <div class="review-item">
+              <input class="item-name" value="${escapeAttr(item.name)}" onchange="reviewData[${ci}].items[${ii}].name = this.value" />
+              <input class="item-desc" placeholder="Description" value="${escapeAttr(item.description || '')}" onchange="reviewData[${ci}].items[${ii}].description = this.value" />
+              <div class="review-sizes">
+                ${item.sizes.map((s, si) => `
+                  <input class="size-label" value="${escapeAttr(s.label)}" onchange="reviewData[${ci}].items[${ii}].sizes[${si}].label = this.value" />
+                  <input class="size-price" type="number" step="0.01" value="${money(s.priceCents)}" onchange="reviewData[${ci}].items[${ii}].sizes[${si}].priceCents = Math.round(parseFloat(this.value || 0) * 100)" />
+                `).join('')}
+              </div>
+              <button onclick="removeItem(${ci}, ${ii})">Remove</button>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
+    function escapeAttr(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    function removeCategory(ci) {
+      reviewData.splice(ci, 1);
+      renderReview();
+    }
+
+    function removeItem(ci, ii) {
+      reviewData[ci].items.splice(ii, 1);
+      renderReview();
+    }
+
+    function cancelReview() {
+      reviewData = [];
+      document.getElementById('review-card').style.display = 'none';
+    }
+
+    async function commitImport() {
+      const statusEl = document.getElementById('commit-status');
+      const btn = document.getElementById('commit-btn');
+      btn.disabled = true;
+      statusEl.style.display = '';
+      statusEl.textContent = 'Importing…';
+      try {
+        const result = await api('/menu/import/commit', { method: 'POST', body: JSON.stringify({ categories: reviewData }) });
+        statusEl.textContent = `Imported ${result.importedCategories} categories and ${result.importedItems} items.`;
+        reviewData = [];
+        setTimeout(() => { window.location.href = `/${STORE_SLUG}/admin/menu/items`; }, 1200);
+      } catch (err) {
+        statusEl.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+
+  <%- include('../_sidebar_close') %>
+</body>
+</html>
