@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { MenuCategory, MenuItem } from '../types';
 import { ItemModal } from '../components/ItemModal';
-import { VoiceOrderButton } from '../components/VoiceOrderButton';
 import { formatCents } from '../lib/money';
 
 export function MenuPage() {
@@ -26,7 +25,6 @@ export function MenuPage() {
 
   return (
     <div className="menu-layout">
-      <VoiceOrderButton />
       <aside className="menu-sidebar">
         {categories.map((cat) => (
           <button

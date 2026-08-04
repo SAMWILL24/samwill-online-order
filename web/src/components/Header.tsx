@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { VoiceOrderButton } from './VoiceOrderButton';
 import logo from '../assets/logo.png';
 
 export function Header() {
@@ -13,6 +14,7 @@ export function Header() {
         SAMWILL Kitchen
       </Link>
       <nav>
+        <VoiceOrderButton />
         <Link to={`/${storeSlug}/menu`}>Menu</Link>
         {customer ? (
           <>

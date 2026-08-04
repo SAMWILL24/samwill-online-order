@@ -51,12 +51,12 @@ function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-type Stage = 'idle' | 'listening' | 'processing' | 'reviewing' | 'error';
+type Stage = 'idle' | 'choosing-language' | 'listening' | 'processing' | 'reviewing' | 'error';
 
 const LANGUAGES = [
-  { code: 'en-US', label: '🎤 Order by voice', listening: '🎤 Listening... say your order' },
-  { code: 'ar-EG', label: '🎤 اطلب بصوتك', listening: '🎤 بسمعك... قول طلبك' },
-  { code: 'es-US', label: '🎤 Ordenar por voz', listening: '🎤 Escuchando... di tu pedido' },
+  { code: 'en-US', shortLabel: 'English', listening: '🎤 Listening... say your order' },
+  { code: 'ar-EG', shortLabel: 'العربية', listening: '🎤 بسمعك... قول طلبك' },
+  { code: 'es-US', shortLabel: 'Español', listening: '🎤 Escuchando... di tu pedido' },
 ];
 
 const DONE_LABEL: Record<string, string> = { 'en-US': "Done - that's my order", 'ar-EG': 'خلصت - ده طلبي', 'es-US': 'Listo - ese es mi pedido' };
@@ -229,23 +229,33 @@ export function VoiceOrderButton() {
 
   return (
     <>
-      <div className="voice-order-lang-row">
-        {LANGUAGES.map((l) => (
-          <button
-            key={l.code}
-            className="btn voice-order-btn"
-            type="button"
-            onClick={() => startListening(l.code)}
-            disabled={stage !== 'idle'}
-          >
-            {l.label}
-          </button>
-        ))}
-      </div>
+      <button
+        className="voice-order-icon-btn"
+        type="button"
+        aria-label="Order by voice"
+        title="Order by voice"
+        onClick={() => setStage('choosing-language')}
+      >
+        🎤
+      </button>
 
       {stage !== 'idle' && (
         <div className="voice-order-overlay">
           <div className="voice-order-panel">
+            {stage === 'choosing-language' && (
+              <>
+                <h3>Order by voice</h3>
+                <p className="muted">What language will you speak?</p>
+                {LANGUAGES.map((l) => (
+                  <button key={l.code} className="btn voice-order-lang-choice-btn" type="button" onClick={() => startListening(l.code)}>
+                    {l.shortLabel}
+                  </button>
+                ))}
+                <button className="btn" type="button" onClick={cancel}>
+                  Cancel
+                </button>
+              </>
+            )}
             {stage === 'listening' && (
               <>
                 <p className="voice-order-status">{LANGUAGES.find((l) => l.code === lang)?.listening}</p>

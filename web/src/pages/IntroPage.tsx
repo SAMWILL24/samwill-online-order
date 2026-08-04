@@ -5,6 +5,11 @@ import type { RestaurantSettings } from '../types';
 import { PromotionsBanner } from '../components/PromotionsBanner';
 import { AnnouncementsBanner } from '../components/AnnouncementsBanner';
 
+function voiceInputSupported(): boolean {
+  const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+  return Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
+}
+
 function firstEnabledType(s: RestaurantSettings): 'pickup' | 'delivery' | 'curbside' | null {
   if (s.pickupEnabled) return 'pickup';
   if (s.deliveryEnabled) return 'delivery';
@@ -53,6 +58,10 @@ export function IntroPage() {
     <div className="intro">
       <h1>{settings?.name || 'SAMWILL Kitchen'}</h1>
       <p className="muted">{settings?.storeDescription || 'Order online for pickup or delivery.'}</p>
+
+      {settings?.voiceOrderingEnabled && voiceInputSupported() && (
+        <p className="voice-order-hint">🎤 Prefer to order by voice? Tap the mic icon above, anytime.</p>
+      )}
 
       <AnnouncementsBanner />
       <PromotionsBanner />
