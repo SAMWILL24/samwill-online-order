@@ -61,6 +61,7 @@ const LANGUAGES = [
 
 const DONE_LABEL: Record<string, string> = { 'en-US': "Done - that's my order", 'ar-EG': 'خلصت - ده طلبي', 'es-US': 'Listo - ese es mi pedido' };
 const CANCEL_LABEL: Record<string, string> = { 'en-US': 'Cancel', 'ar-EG': 'إلغاء', 'es-US': 'Cancelar' };
+const ADD_MORE_LABEL: Record<string, string> = { 'en-US': '🎤 Add another item', 'ar-EG': '🎤 ضيف صنف تاني', 'es-US': '🎤 Agregar otro artículo' };
 
 export function VoiceOrderButton() {
   const { api, addToCart } = useApp();
@@ -74,6 +75,9 @@ export function VoiceOrderButton() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const finalTranscriptRef = useRef('');
   const cancelledRef = useRef(false);
+  // "Add another item" starts a fresh listening pass whose results should
+  // merge into the order already on the review screen, not replace it.
+  const appendModeRef = useRef(false);
 
   useEffect(() => {
     if (!getSpeechRecognition()) {
@@ -88,10 +92,19 @@ export function VoiceOrderButton() {
 
   async function processTranscript(transcript: string) {
     setStage('processing');
+    const appending = appendModeRef.current;
+    appendModeRef.current = false;
     try {
       const data = await api.voiceOrder(transcript);
-      setResult(data);
-      setReviewItems(data.items);
+      if (appending) {
+        setResult((prev) =>
+          prev ? { items: [...prev.items, ...data.items], unmatched: [...prev.unmatched, ...data.unmatched] } : data
+        );
+        setReviewItems((prev) => [...prev, ...data.items]);
+      } else {
+        setResult(data);
+        setReviewItems(data.items);
+      }
       setStage('reviewing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not process that order');
@@ -149,8 +162,32 @@ export function VoiceOrderButton() {
     recognitionRef.current?.stop();
   }
 
+  function addAnotherItem() {
+    appendModeRef.current = true;
+    startListening(lang);
+  }
+
+  // Cancelling while the mic is open behaves differently depending on how we
+  // got there: cancelling a fresh order wipes everything, but cancelling an
+  // "add another item" pass should just drop that pass and return to the
+  // order already on the review screen, not discard it.
+  function cancelListening() {
+    cancelledRef.current = true;
+    recognitionRef.current?.stop();
+    if (appendModeRef.current) {
+      appendModeRef.current = false;
+      setStage('reviewing');
+    } else {
+      setStage('idle');
+      setResult(null);
+      setReviewItems([]);
+      setError(null);
+    }
+  }
+
   function cancel() {
     cancelledRef.current = true;
+    appendModeRef.current = false;
     recognitionRef.current?.stop();
     setStage('idle');
     setResult(null);
@@ -214,7 +251,7 @@ export function VoiceOrderButton() {
                 <p className="voice-order-status">{LANGUAGES.find((l) => l.code === lang)?.listening}</p>
                 {liveText && <p className="voice-order-live-text">{liveText}</p>}
                 <div className="voice-order-actions">
-                  <button className="btn" type="button" onClick={cancel}>
+                  <button className="btn" type="button" onClick={cancelListening}>
                     {CANCEL_LABEL[lang]}
                   </button>
                   <button className="btn btn-primary" type="button" onClick={finishListening}>
@@ -263,6 +300,9 @@ export function VoiceOrderButton() {
                 {result.unmatched.length > 0 && (
                   <p className="muted">Couldn't find: {result.unmatched.join('; ')}</p>
                 )}
+                <button className="btn voice-order-add-more-btn" type="button" onClick={addAnotherItem}>
+                  {ADD_MORE_LABEL[lang]}
+                </button>
                 <div className="voice-order-actions">
                   <button className="btn" type="button" onClick={cancel}>
                     Cancel
