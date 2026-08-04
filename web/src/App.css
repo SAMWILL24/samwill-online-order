@@ -105,13 +105,21 @@
   font-size: 1.1rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .voice-order-lang-choice-btn { width: 100%; margin-bottom: 0.5rem; }
+/* A bottom sheet, not a full-screen modal - customers said they need to keep
+   scrolling the menu behind it while ordering by voice, so this never covers
+   more than the bottom slice of the screen and never blocks the rest of it. */
 .voice-order-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-  display: flex; align-items: center; justify-content: center; z-index: 60;
+  position: fixed; inset: 0; pointer-events: none;
+  display: flex; align-items: flex-end; justify-content: center; z-index: 60;
 }
 .voice-order-panel {
-  background: var(--surface); width: 100%; max-width: 420px; border-radius: 16px;
-  padding: 1.5rem; margin: 1rem;
+  background: var(--surface); width: 100%; max-width: 480px; max-height: 48vh; overflow-y: auto;
+  border-radius: 16px 16px 0 0; padding: 1.25rem 1.5rem 1.5rem; pointer-events: auto;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.18);
+}
+@media (min-width: 640px) {
+  .voice-order-overlay { align-items: center; padding-bottom: 0; }
+  .voice-order-panel { border-radius: 16px; margin-bottom: 1rem; }
 }
 .voice-order-status { font-size: 1.05rem; text-align: center; margin: 1rem 0 1.5rem; }
 .voice-order-live-text { font-size: 0.95rem; color: var(--text-muted); text-align: center; min-height: 1.5em; margin: -0.75rem 0 1.5rem; }

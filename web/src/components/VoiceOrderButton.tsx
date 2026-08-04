@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCents } from '../lib/money';
 import type { VoiceOrderLine, VoiceOrderResult } from '../types';
@@ -64,7 +65,9 @@ const CANCEL_LABEL: Record<string, string> = { 'en-US': 'Cancel', 'ar-EG': 'إل
 const ADD_MORE_LABEL: Record<string, string> = { 'en-US': '🎤 Add another item', 'ar-EG': '🎤 ضيف صنف تاني', 'es-US': '🎤 Agregar otro artículo' };
 
 export function VoiceOrderButton() {
-  const { api, addToCart } = useApp();
+  const { storeSlug, api, addToCart } = useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [supported, setSupported] = useState(true);
   const [stage, setStage] = useState<Stage>('idle');
   const [result, setResult] = useState<VoiceOrderResult | null>(null);
@@ -227,6 +230,16 @@ export function VoiceOrderButton() {
 
   if (!supported) return null;
 
+  function openVoiceOrder() {
+    // The review sheet only covers the bottom of the screen on purpose - if
+    // there's no menu behind it to scroll through, send them to the one page
+    // where browsing while talking actually works.
+    if (!location.pathname.endsWith('/menu')) {
+      navigate(`/${storeSlug}/menu`);
+    }
+    setStage('choosing-language');
+  }
+
   return (
     <>
       <button
@@ -234,7 +247,7 @@ export function VoiceOrderButton() {
         type="button"
         aria-label="Order by voice"
         title="Order by voice"
-        onClick={() => setStage('choosing-language')}
+        onClick={openVoiceOrder}
       >
         🎤
       </button>
