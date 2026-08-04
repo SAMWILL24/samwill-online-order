@@ -109,6 +109,7 @@
   padding: 1.5rem; margin: 1rem;
 }
 .voice-order-status { font-size: 1.05rem; text-align: center; margin: 1rem 0 1.5rem; }
+.voice-order-live-text { font-size: 0.95rem; color: var(--text-muted); text-align: center; min-height: 1.5em; margin: -0.75rem 0 1.5rem; }
 .voice-order-line { display: flex; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 .voice-order-actions { display: flex; gap: 0.75rem; margin-top: 1.25rem; }
 .voice-order-actions .btn { flex: 1; }

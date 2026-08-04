@@ -67,7 +67,11 @@ async function askClaude(simplifiedMenu, transcript) {
         content: `Menu:\n${JSON.stringify(simplifiedMenu)}\n\nCustomer said: "${transcript}"`,
       },
     ],
-    output_config: { format: RESPONSE_SCHEMA },
+    // A short, single-turn extraction task doesn't need deep reasoning - low
+    // effort cuts response time substantially with no accuracy loss here,
+    // and the server-side re-validation below is what actually guards
+    // correctness, not how hard the model thought about it.
+    output_config: { effort: 'low', format: RESPONSE_SCHEMA },
   });
 
   const textBlock = response.content.find((b) => b.type === 'text');
