@@ -279,11 +279,17 @@ router.post('/api/menu/import/parse', menuImportLimiter, upload.single('image'),
   try {
     let categories;
     if (req.file) {
-      const mediaType = req.file.mimetype;
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType)) {
-        return res.status(400).json({ error: 'Image must be JPEG, PNG, or WebP' });
+      // Phone photos are frequently HEIC (iPhone's default) or huge, neither
+      // of which Claude's vision input accepts reliably - normalize
+      // everything to a reasonably-sized JPEG server-side rather than
+      // trusting the browser to have sent something usable.
+      let normalized;
+      try {
+        normalized = await sharp(req.file.buffer).rotate().resize({ width: 1600, withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+      } catch (err) {
+        return res.status(400).json({ error: "Couldn't read that image - try a different photo (JPEG or PNG works best)" });
       }
-      categories = await menuImport.parseMenuFromImage(req.file.buffer.toString('base64'), mediaType);
+      categories = await menuImport.parseMenuFromImage(normalized.toString('base64'), 'image/jpeg');
     } else if (req.body?.text) {
       categories = await menuImport.parseMenuFromText(req.body.text);
     } else {

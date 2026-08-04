@@ -51,7 +51,11 @@
         <textarea id="import-textarea" placeholder="Paste your menu here, e.g.&#10;&#10;Appetizers&#10;Mozzarella Sticks - $8.99&#10;Wings (6pc) - $9.99 / (12pc) - $17.99&#10;&#10;Pizza&#10;Cheese - SM $10.99 / LG $15.99"></textarea>
       </div>
       <div id="mode-image" style="display:none;">
-        <input type="file" id="import-image" accept="image/jpeg,image/png,image/webp" />
+        <input type="file" id="import-image" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onchange="handleImageSelect(this)" />
+        <div id="image-preview-wrap" style="display:none;margin-top:0.75rem;">
+          <img id="image-preview" style="max-width:280px;max-height:280px;border-radius:8px;border:1px solid #333;display:block;" />
+          <p id="image-preview-name" class="hint" style="margin-top:0.3rem;"></p>
+        </div>
       </div>
 
       <p class="error" id="parse-error" style="display:none;"></p>
@@ -91,6 +95,26 @@
       document.getElementById('mode-image-btn').classList.toggle('active', next === 'image');
       document.getElementById('mode-text').style.display = next === 'text' ? '' : 'none';
       document.getElementById('mode-image').style.display = next === 'image' ? '' : 'none';
+    }
+
+    function handleImageSelect(input) {
+      const file = input.files[0];
+      const wrap = document.getElementById('image-preview-wrap');
+      const preview = document.getElementById('image-preview');
+      const nameEl = document.getElementById('image-preview-name');
+      if (!file) {
+        wrap.style.display = 'none';
+        return;
+      }
+      nameEl.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+      wrap.style.display = '';
+      // HEIC photos (the iPhone default) usually can't be decoded into an
+      // <img> preview by desktop browsers, even though the server can still
+      // convert and read them - fall back to just the filename in that case
+      // instead of a broken image icon.
+      preview.onerror = () => { preview.style.display = 'none'; };
+      preview.onload = () => { preview.style.display = ''; };
+      preview.src = URL.createObjectURL(file);
     }
 
     (async function checkConfigured() {
