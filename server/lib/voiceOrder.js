@@ -57,13 +57,11 @@ const RESPONSE_SCHEMA = {
 async function askClaude(simplifiedMenu, transcript) {
   const client = new Anthropic();
   const response = await client.messages.create({
-    // Matching a short spoken order against a small, well-defined menu is a
-    // simple extraction task, not something that needs Opus-tier reasoning -
-    // Haiku is dramatically faster here, and the server-side re-validation
-    // below is what actually guards correctness either way. Haiku doesn't
-    // take `effort` (errors if passed) and defaults to no thinking, which is
-    // exactly what this call wants.
-    model: 'claude-haiku-4-5',
+    // Haiku was fast but noticeably worse at matching loosely-phrased spoken
+    // orders to the right menu item - Sonnet keeps most of Opus's language
+    // understanding at a fraction of the latency. Low effort trims it
+    // further for this short, single-turn task.
+    model: 'claude-sonnet-5',
     max_tokens: 2048,
     system:
       "You match a customer's spoken restaurant order to a specific menu. Only use menuItemId/sizeId/extraId values that literally appear in the menu JSON provided - never invent or guess one. If a requested item, size, or extra has no reasonable match on this menu, put the customer's own words for it in \"unmatched\" instead of forcing a match. Quantities default to 1 when not stated. Half-and-half / split orders are not supported yet - route those to \"unmatched\" with a short note.",
@@ -73,7 +71,7 @@ async function askClaude(simplifiedMenu, transcript) {
         content: `Menu:\n${JSON.stringify(simplifiedMenu)}\n\nCustomer said: "${transcript}"`,
       },
     ],
-    output_config: { format: RESPONSE_SCHEMA },
+    output_config: { effort: 'low', format: RESPONSE_SCHEMA },
   });
 
   const textBlock = response.content.find((b) => b.type === 'text');
