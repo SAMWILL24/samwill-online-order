@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCents } from '../lib/money';
-import type { VoiceOrderResult } from '../types';
+import type { VoiceOrderLine, VoiceOrderResult } from '../types';
 
 // Not in lib.dom.d.ts yet - the Web Speech API types are still non-standard.
 interface SpeechRecognitionAlternativeLike {
@@ -67,6 +67,7 @@ export function VoiceOrderButton() {
   const [supported, setSupported] = useState(true);
   const [stage, setStage] = useState<Stage>('idle');
   const [result, setResult] = useState<VoiceOrderResult | null>(null);
+  const [reviewItems, setReviewItems] = useState<VoiceOrderLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<string>('en-US');
   const [liveText, setLiveText] = useState('');
@@ -90,6 +91,7 @@ export function VoiceOrderButton() {
     try {
       const data = await api.voiceOrder(transcript);
       setResult(data);
+      setReviewItems(data.items);
       setStage('reviewing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not process that order');
@@ -152,12 +154,24 @@ export function VoiceOrderButton() {
     recognitionRef.current?.stop();
     setStage('idle');
     setResult(null);
+    setReviewItems([]);
     setError(null);
   }
 
+  function removeReviewItem(index: number) {
+    setReviewItems((items) => items.filter((_, i) => i !== index));
+  }
+
+  function adjustReviewQuantity(index: number, delta: number) {
+    setReviewItems((items) =>
+      items
+        .map((line, i) => (i === index ? { ...line, quantity: line.quantity + delta } : line))
+        .filter((line) => line.quantity > 0)
+    );
+  }
+
   function confirmAdd() {
-    if (!result) return;
-    for (const line of result.items) {
+    for (const line of reviewItems) {
       addToCart({
         menuItemId: line.menuItemId,
         menuItemName: line.menuItemName,
@@ -171,6 +185,7 @@ export function VoiceOrderButton() {
     }
     setStage('idle');
     setResult(null);
+    setReviewItems([]);
   }
 
   if (!supported) return null;
@@ -220,16 +235,29 @@ export function VoiceOrderButton() {
             {stage === 'reviewing' && result && (
               <>
                 <h3>Here's what I heard</h3>
-                {result.items.length === 0 && <p className="muted">Couldn't match anything on the menu.</p>}
-                {result.items.map((line, i) => (
+                <p className="muted">Wrong item or quantity? Fix it below before adding.</p>
+                {reviewItems.length === 0 && <p className="muted">Couldn't match anything on the menu.</p>}
+                {reviewItems.map((line, i) => (
                   <div className="voice-order-line" key={i}>
                     <span>
-                      {line.quantity}x {line.menuItemName} ({line.sizeLabel})
+                      {line.menuItemName} ({line.sizeLabel})
                       {line.extras.length > 0 && (
                         <span className="muted"> + {line.extras.map((e) => e.name).join(', ')}</span>
                       )}
                     </span>
-                    <span>{formatCents(line.unitPriceCents * line.quantity)}</span>
+                    <div className="voice-order-line-controls">
+                      <button type="button" className="voice-order-qty-btn" onClick={() => adjustReviewQuantity(i, -1)}>
+                        −
+                      </button>
+                      <span>{line.quantity}</span>
+                      <button type="button" className="voice-order-qty-btn" onClick={() => adjustReviewQuantity(i, 1)}>
+                        +
+                      </button>
+                      <span className="voice-order-line-price">{formatCents(line.unitPriceCents * line.quantity)}</span>
+                      <button type="button" className="voice-order-remove-btn" onClick={() => removeReviewItem(i)} aria-label="Remove">
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {result.unmatched.length > 0 && (
@@ -243,7 +271,7 @@ export function VoiceOrderButton() {
                     className="btn btn-primary"
                     type="button"
                     onClick={confirmAdd}
-                    disabled={result.items.length === 0}
+                    disabled={reviewItems.length === 0}
                   >
                     Add to cart
                   </button>
